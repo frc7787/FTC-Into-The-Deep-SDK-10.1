@@ -3,6 +3,7 @@ package org.firstinspires.ftc.teamcode.subsystems.mecanumdrive;
 import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.*;
 import static com.qualcomm.robotcore.hardware.DcMotorSimple.Direction.*;
 import static org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.DEGREES;
+import static org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.RADIANS;
 import static org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit.*;
 import static org.firstinspires.ftc.teamcode.constants.Constants.DrivebaseConstants.*;
 
@@ -112,17 +113,11 @@ public final class MecanumDriveSubsystem extends SubsystemBase {
      * @param turn The value to turn
      */
     public void fieldCentric(double drive, double strafe, double turn) {
-        if (Math.abs(drive)  < DRIVE_DEAD_ZONE)  drive  = 0.0;
-        if (Math.abs(strafe) < STRAFE_DEAD_ZONE) strafe = 0.0;
-        if (Math.abs(turn)   < TURN_DEAD_ZONE)   turn   = 0.0;
-
-        double theta = Math.atan2(drive, strafe);
+        double theta = Math.atan2(drive, strafe) - imu.getRobotYawPitchRollAngles().getYaw(RADIANS);
         double power = Math.hypot(strafe, drive);
 
-        theta -= imu.getRobotYawPitchRollAngles().getYaw();
-
-        double sin_theta = Math.sin(Math.toRadians(theta));
-        double cos_theta = Math.cos(Math.toRadians(theta));
+        double sin_theta = Math.sin(Math.toRadians(theta) - Math.PI / 4.0);
+        double cos_theta = Math.cos(Math.toRadians(theta) - Math.PI / 4.0);
 
         double max = Math.max(Math.abs(cos_theta), Math.abs(sin_theta));
 

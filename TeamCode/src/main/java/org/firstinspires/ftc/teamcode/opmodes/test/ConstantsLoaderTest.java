@@ -7,7 +7,7 @@ import org.firstinspires.ftc.teamcode.constants.Constants;
 import org.firstinspires.ftc.teamcode.constants.ConstantsLoader;
 
 @TeleOp(name = "Test")
-public class ConstantsLoaderTest extends OpMode {
+public final class ConstantsLoaderTest extends OpMode {
 
     @Override public void init() {
         new ConstantsLoader(telemetry).load();

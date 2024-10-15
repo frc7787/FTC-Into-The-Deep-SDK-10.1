@@ -3,17 +3,18 @@ package org.firstinspires.ftc.teamcode.opmodes.test;
 import com.qualcomm.robotcore.eventloop.opmode.*;
 import com.qualcomm.robotcore.hardware.DcMotorImplEx;
 
-@TeleOp(name = "Test - Motor", group = "Test")
+import org.firstinspires.ftc.teamcode.subsystems.mecanumdrive.ArmSubsystem;
+
+@TeleOp(name = "Test - Arm Subsystem", group = "Test")
 public final class MotorTest extends OpMode {
-    DcMotorImplEx motorOne, motorTwo;
+    private ArmSubsystem armSubsystem;
 
     @Override public void init() {
-       motorOne = hardwareMap.get(DcMotorImplEx.class, "motorOne");
-       motorTwo = hardwareMap.get(DcMotorImplEx.class, "motorTwo");
+        armSubsystem = new ArmSubsystem(hardwareMap);
     }
 
     @Override public void loop() {
-        motorOne.setPower(1.0);
-        motorTwo.setPower(1.0);
+        armSubsystem.setExtensionPower(gamepad1.left_stick_y * -1.0);
+        armSubsystem.setRotationPower(gamepad1.right_stick_y * -1.0);
     }
 }
