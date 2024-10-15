@@ -19,6 +19,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit.*
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit.*
 import org.firstinspires.ftc.teamcode.constants.ConstantsType.Companion.fieldToType
 import java.io.IOException
+import kotlin.reflect.KVisibility
 
 class ConstantsLoader(telemetry: Telemetry? = null) {
     private val debugger = ConstantsDebugger(telemetry)
@@ -38,8 +39,8 @@ class ConstantsLoader(telemetry: Telemetry? = null) {
     fun load() {
         for (file in loadConstantsFiles()) {
             try {
-                for (clazz in Constants::class.java.declaredClasses) {
-                    if (isFieldLoadable(clazz.modifiers) && clazz.simpleName == file.name) {
+                for (clazz in Constants::class.nestedClasses) {
+                    if (isClassLoadable(clazz) && clazz.simpleName == file.name) {
                        loadClass(clazz, file.name)
                     }
                 }
@@ -50,13 +51,13 @@ class ConstantsLoader(telemetry: Telemetry? = null) {
         if (debugger.telemetry != null) debugger.displayAll()
     }
 
-    private fun loadClass(clazz: Class<*>, fileName: String) {
+    private fun loadClass(clazz: KClass<*>, fileName: String) {
         val properties = Properties()
 
         properties.load(FileInputStream("$SD_CARD_PATH/Constants/$fileName"))
 
-        for (field in clazz.fields) {
-            if (!isFieldLoadable(field.modifiers)) continue
+        for (field in clazz.java.fields) {
+            if (!isFieldLoadable(field)) continue
             loadField(field, properties)
         }
     }
@@ -192,9 +193,24 @@ class ConstantsLoader(telemetry: Telemetry? = null) {
         return arrayOf(valueOne.toDouble(), valueTwo.toDouble(), valueThree.toDouble())
     }
 
-    private fun isFieldLoadable(modifiers: Int): Boolean {
-        return Modifier.isStatic(modifiers)
-               && Modifier.isPublic(modifiers)
-               && !Modifier.isFinal(modifiers)
+    private fun isFieldLoadable(field: Field): Boolean {
+       val isPublic = clazz.
+    }
+
+    private fun isClassLoadable(clazz: KClass<*>): Boolean {
+        val isPublic = clazz.visibility == KVisibility.PUBLIC
+        val isStatic = Modifier.isStatic(clazz.java.modifiers)
+
+        if (!isPublic || !isStatic) {
+            var issue = "Failed To Load Clazz: ${clazz.simpleName}"
+
+            if (!isPublic) issue += "\nReason: Class in not public"
+            if (!isStatic) issue += "\nReason: Class is not static"
+
+            debugger.addMessage(issue)
+            return false
+        }
+
+        return true
     }
 }

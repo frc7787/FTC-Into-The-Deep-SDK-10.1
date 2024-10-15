@@ -10,7 +10,7 @@ import org.firstinspires.ftc.teamcode.constants.ConstantsType.*;
 import org.firstinspires.ftc.teamcode.constants.ConstantsType.Companion.fieldToType
 import java.io.IOException
 
-class ConstantsSaver(telemetry: Telemetry?) {
+class ConstantsSaver(telemetry: Telemetry? = null) {
     private val debugger = ConstantsDebugger(telemetry)
 
     fun save() {
