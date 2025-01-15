@@ -25,7 +25,6 @@ public class RetractArmAction implements Action {
     @Override public boolean run(@NonNull TelemetryPacket telemetryPacket) {
         if (isFirstIteration) {
             elapsedTime.reset();
-            arm.setExtensionTargetPosition(extensionPosition);
             isFirstIteration = false;
         }
         arm.update();

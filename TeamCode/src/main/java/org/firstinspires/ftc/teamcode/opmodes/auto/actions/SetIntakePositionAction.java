@@ -8,16 +8,18 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.subsystems.arm.Arm;
 
-public class OpenGripperAction implements Action {
+public final class SetIntakePositionAction implements Action {
     private final Arm arm;
     private final double position;
+    private final double timeOutMS;
     private final ElapsedTime timer;
 
     private boolean initialized;
 
-    public OpenGripperAction(@NonNull Arm arm, double position) {
+    public SetIntakePositionAction(@NonNull Arm arm, double position, double timeOutMS) {
         this.arm = arm;
         this.position = position;
+        this.timeOutMS = timeOutMS;
         initialized = false;
         timer = new ElapsedTime();
     }
@@ -29,6 +31,6 @@ public class OpenGripperAction implements Action {
             initialized = true;
         }
 
-        return timer.milliseconds() < 100;
+        return timer.milliseconds() < timeOutMS;
     }
 }

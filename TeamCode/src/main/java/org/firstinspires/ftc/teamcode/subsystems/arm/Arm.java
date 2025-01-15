@@ -5,14 +5,12 @@ import static com.qualcomm.robotcore.hardware.DcMotor.ZeroPowerBehavior.BRAKE;
 import androidx.annotation.NonNull;
 
 import com.qualcomm.hardware.rev.RevTouchSensor;
-import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotorImplEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
-import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.robotcore.external.navigation.CurrentUnit;
 import org.firstinspires.ftc.teamcode.utility.*;
 import static org.firstinspires.ftc.teamcode.subsystems.arm.ArmConstants.*;
@@ -23,37 +21,32 @@ public class Arm {
     // Hardware
     // ---------------------------------------------------------------------------------------------
 
-    private final DcMotorImplEx leaderExtensionMotor,
+    final DcMotorImplEx leaderExtensionMotor,
                                 followerExtensionMotor,
                                 rotationMotor;
 
-    private final RevTouchSensor frontRotationLimitSwitch,
+    final RevTouchSensor frontRotationLimitSwitch,
                                  backRotationLimitSwitch,
                                  extensionLimitSwitch;
 
-    private final Servo intakeServo;
+    final Servo intakeServo;
 
     // ---------------------------------------------------------------------------------------------
     // Global State
     // ---------------------------------------------------------------------------------------------
 
-    private ArmState armState;
-    private HomingState homingState;
+    ArmState armState;
+    HomingState homingState;
 
-    private int rotationTargetPosition, extensionTargetPosition;
-    private int rotationPosition, extensionPosition;
-    private double vExtensionTargetInches, hExtensionTargetInches;
+    int rotationTargetPosition, extensionTargetPosition;
+    int rotationPosition, extensionPosition;
+    double verticalTargetInches, horizontalTargetInches;
 
-    private double maxSpeed;
+    double maxSpeed;
 
-    private boolean isFirstManualControlIteration;
+    boolean isFirstManualControlIteration;
+
     private ElapsedTime manualControlTimer;
-
-    // ---------------------------------------------------------------------------------------------
-    // Debug
-    // ---------------------------------------------------------------------------------------------
-
-    private final Telemetry telemetry;
 
     // ---------------------------------------------------------------------------------------------
     // Controllers
@@ -69,10 +62,7 @@ public class Arm {
     // Construction
     // ---------------------------------------------------------------------------------------------
 
-    public Arm(@NonNull OpMode opMode) {
-        telemetry = opMode.telemetry;
-
-        HardwareMap hardwareMap = opMode.hardwareMap;
+    public Arm(@NonNull HardwareMap hardwareMap) {
 
         leaderExtensionMotor = hardwareMap.get(DcMotorImplEx.class, "leaderExtensionMotor");
         followerExtensionMotor = hardwareMap.get(DcMotorImplEx.class, "followerExtensionMotor");
@@ -95,8 +85,8 @@ public class Arm {
 
         maxSpeed = MAX_EXTENSION_POWER;
 
-        hExtensionTargetInches = START_POSITION_XY[0];
-        vExtensionTargetInches = START_POSITION_XY[1];
+        horizontalTargetInches = START_POSITION_XY[0];
+        verticalTargetInches = START_POSITION_XY[1];
 
         armState = ArmState.HOMING;
         homingState = HomingState.START;
@@ -161,29 +151,57 @@ public class Arm {
         leaderExtensionMotor.setPower(0);
     }
 
-    public void manualControlPolar(double thetaInput, double radiusInput, double speed) {
-
+    /**
+     * Calculates the vertical position (in inches) required to keep the arm hovering just above
+     * the samples given the supplied horizontal position (in inches)
+     * @param xInches The horizontal position to calculate the vertical position for
+     * @return The calculated vertical position
+     */
+    private static double calculatePolynomialRegression(double xInches) {
+        return -10.2 + (2.02 * xInches) + (-0.149 * Math.pow(xInches, 2)) +
+                (4.82e-3 * Math.pow(xInches, 3)) + (-5.58e-5 * Math.pow(xInches, 4));
     }
 
-    public void manualControlCartesian(double xInput, double yInput, double speed) {
-        hExtensionTargetInches += (xInput * manualControlTimer.seconds() * speed);
-        vExtensionTargetInches += (yInput * manualControlTimer.seconds() * speed);
+    /**
+     * Manual control flavour using a polynomial regression to keep the intake level while
+     * extending.
+     * @param xInput The value to control the horizontal extension of the arm
+     * @param speed The speed in in/sec to move the arm at. Increasing this value will make the arm
+     *              move faster, however it will also increase its choppiness.
+     */
+    public void manualControlSub(double xInput, double speed) {
+        horizontalTargetInches += (xInput * manualControlTimer.seconds() * speed);
         manualControlTimer.reset();
-        if (hExtensionTargetInches > 30) hExtensionTargetInches = 30;
-        if (vExtensionTargetInches < -5) vExtensionTargetInches = -5;
-        double[] polarCoordinates = cartesianToPolar(hExtensionTargetInches, vExtensionTargetInches);
-        rotationTargetPosition = rotationDegreesToTicks(polarCoordinates[0]);
+        horizontalTargetInches = Range.clip(horizontalTargetInches, 2.0, 30.0);
+        verticalTargetInches = calculatePolynomialRegression(horizontalTargetInches);
+        double[] polarCoordinates = cartesianToPolar(horizontalTargetInches, verticalTargetInches);
+        rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
         extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
     }
 
-    public void manualControlCartesian(double xInput, double yInput) {
-        manualControlCartesian(xInput, yInput, DEFAULT_MANUAL_SPEED);
+    /**
+     * Manual control flavour allowing for control of horizontal and vertical position of the arm.
+     * @param xInput Input to control the horizontal position of the arm. The regression can be
+     *               found at <a href="https://docs.google.com/spreadsheets/d/1GnF52eFFj6NZARqxjOI01XXZJkzJ-WH21ysyxr2HlAs/edit?gid=0#gid=0"></a>
+     * @param yInput Input to control the vertical position of the arm
+     * @param inchesPerSecond The speed to move the arm at in in/sec. Increasing this value will increase the
+     *              speed at which the arm extends, however it will also increase its choppiness.
+     */
+    public void manualControlCartesian(double xInput, double yInput, double inchesPerSecond) {
+        horizontalTargetInches += (xInput * manualControlTimer.seconds() * inchesPerSecond);
+        verticalTargetInches += (yInput * manualControlTimer.seconds() * inchesPerSecond);
+        manualControlTimer.reset();
+        if (horizontalTargetInches > 30) horizontalTargetInches = 30;
+        if (verticalTargetInches < -5) verticalTargetInches = -5;
+        double[] polarCoordinates = cartesianToPolar(horizontalTargetInches, verticalTargetInches);
+        rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
+        extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
     }
 
-    public void resetManualControl() {
-        isFirstManualControlIteration = true;
-    }
-
+    /**
+     * Runs the homing sequence of the arm. Note this function is non blocking and must be called
+     * continually until homingState == HomingState.COMPLETE
+     */
     private void home() {
         switch (homingState) {
             case START:
@@ -241,24 +259,36 @@ public class Arm {
         }
     }
 
-    public void setTargetPositionInches(double hExtensionTargetInches, double vExtensionTargetInches) {
-        if (hExtensionTargetInches >= 30) hExtensionTargetInches = 30;
-        this.hExtensionTargetInches = hExtensionTargetInches;
-        this.vExtensionTargetInches = vExtensionTargetInches;
-        double[] polarCoordinates = cartesianToPolar(hExtensionTargetInches,vExtensionTargetInches);
-        rotationTargetPosition = rotationDegreesToTicks(polarCoordinates[0]);
+    public void setTargetInches(double horizontalTargetInches, double verticalTargetInches) {
+        if (horizontalTargetInches >= 30.0) horizontalTargetInches = 30.0;
+        this.horizontalTargetInches = horizontalTargetInches;
+        this.verticalTargetInches = verticalTargetInches;
+        double[] polarCoordinates = cartesianToPolar(horizontalTargetInches,verticalTargetInches);
+        rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
         extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
     }
 
-    public void setTargetPositionInchesRobotCentric(double hExtensionTargetInches, double vExtensionTargetInches) {
-        hExtensionTargetInches += ROTATION_X_OFFSET_INCHES;
-        vExtensionTargetInches += ROTATION_Y_OFFSET_INCHES;
-        setTargetPositionInches(hExtensionTargetInches, vExtensionTargetInches);
+    public void setHorizontalTargetInches(double horizontalTargetInches) {
+        setTargetInches(horizontalTargetInches, this.verticalTargetInches);
     }
 
-    public void setExtensionTargetPosition(double extensionInches) {
-        extensionInches = Math.min(25, Math.max(extensionInches, 0));
-        extensionTargetPosition = (int) (extensionInches * EXTENSION_TICKS_PER_INCH);
+    public void setVerticalTargetInches(double verticalTargetInches) {
+        setTargetInches(this.horizontalTargetInches, verticalTargetInches);
+    }
+
+    public void setTargetInchesRobotCentric(double horizontalTargetInches, double verticalTargetInches) {
+        setTargetInches(
+                horizontalTargetInches + ROTATION_X_OFFSET_INCHES,
+                verticalTargetInches + ROTATION_Y_OFFSET_INCHES
+        );
+    }
+
+    public void setHorizontalTargetInchesRobotCentric(double horizontalTargetInches) {
+        setTargetInches(horizontalTargetInches + ROTATION_X_OFFSET_INCHES, this.verticalTargetInches);
+    }
+
+    public void setVerticalTargetInchesRobotCentric(double verticalTargetInches) {
+        setTargetInches(this.horizontalTargetInches, verticalTargetInches + ROTATION_Y_OFFSET_INCHES);
     }
 
     public void setIntakePosition(double position) {
@@ -271,28 +301,48 @@ public class Arm {
         maxSpeed = Range.clip(speed, 0.0, 1.0);
     }
 
+    public void setPowersManual(double extensionPower, double rotationPower) {
+        leaderExtensionMotor.setPower(extensionPower);
+        followerExtensionMotor.setPower(extensionPower);
+        rotationMotor.setPower(rotationPower);
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Getters
     // ---------------------------------------------------------------------------------------------
 
     public ArmState state() { return armState; }
 
-    public double hExtensionTargetInches() {
-        return hExtensionTargetInches;
+    public double horizontalTargetInches() {
+        return horizontalTargetInches;
     }
 
-    public double vExtensionTargetInches() {
-        return vExtensionTargetInches;
+    public double verticalTargetInches() {
+        return verticalTargetInches;
     }
 
-    public int rotationPosition() { return rotationMotor.getCurrentPosition(); }
+    public int rotationPosition() {
+        return rotationMotor.getCurrentPosition();
+    }
 
-    public int extensionPosition() { return leaderExtensionMotor.getCurrentPosition(); }
+    public int extensionPosition() {
+        return leaderExtensionMotor.getCurrentPosition();
+    }
 
-    public double degrees() { return rotationMotor.getCurrentPosition() / ROTATION_TICKS_PER_DEGREE ; }
+    public double degrees() {
+        return rotationMotor.getCurrentPosition() / ROTATION_TICKS_PER_DEGREE ;
+    }
 
     public double inches() {
         return (leaderExtensionMotor.getCurrentPosition() / EXTENSION_TICKS_PER_INCH);
+    }
+
+    public double horizontalInches() {
+        return cartesianToPolar(degrees(), inches())[0];
+    }
+
+    public double verticalInches() {
+        return polarToCartesian(degrees(), inches())[1];
     }
 
     public double intakePosition() {
@@ -303,7 +353,7 @@ public class Arm {
 
     public int extensionTargetPosition() { return extensionTargetPosition; }
 
-    public double targetAngleDegrees() {
+    public double targetDegrees() {
         return rotationTargetPosition / ROTATION_TICKS_PER_DEGREE;
     }
 
@@ -311,7 +361,7 @@ public class Arm {
         return extensionTargetPosition / EXTENSION_TICKS_PER_INCH;
     }
 
-    public double currentAmps() {
+    public double amps() {
         return leaderExtensionMotor.getCurrent(CurrentUnit.AMPS)
                + followerExtensionMotor.getCurrent(CurrentUnit.AMPS)
                + rotationMotor.getCurrent(CurrentUnit.AMPS);
@@ -327,54 +377,6 @@ public class Arm {
     }
 
     public boolean isAtPosition() { return rotationAtPosition() && extensionAtPosition(); }
-
-    // ---------------------------------------------------------------------------------------------
-    // Debug
-    // ---------------------------------------------------------------------------------------------
-
-    public void debugGlobal() {
-        telemetry.addLine("----- Debug Global -----");
-        telemetry.addData("Rotation Limit Switch Pressed", frontRotationLimitSwitch.isPressed());
-        telemetry.addData("Extension Limit Switch Pressed", extensionLimitSwitch.isPressed());
-        telemetry.addData("Arm State", armState);
-        telemetry.addData("Homing State", homingState);
-    }
-
-    public void debugSetPowers(double rotationPower, double extensionPower) {
-        rotationMotor.setPower(rotationPower);
-        leaderExtensionMotor.setPower(extensionPower);
-        followerExtensionMotor.setPower(extensionPower);
-    }
-
-    public void debugPosition() {
-        telemetry.addLine("----- Extension -----");
-        telemetry.addData("Position", leaderExtensionMotor.getCurrentPosition());
-        telemetry.addData("Target Position", extensionTargetPosition);
-        telemetry.addData("Inches", leaderExtensionMotor.getCurrentPosition() / EXTENSION_TICKS_PER_INCH);
-        telemetry.addData("Target Inches", targetInches());
-        telemetry.addData("Power", leaderExtensionMotor.getPower());
-        telemetry.addData("At Position", extensionAtPosition());
-        telemetry.addLine("----- Rotation -----");
-        telemetry.addData("Position", rotationMotor.getCurrentPosition());
-        telemetry.addData("Target Position", rotationTargetPosition);
-        telemetry.addData("Degrees", rotationMotor.getCurrentPosition() / ROTATION_TICKS_PER_DEGREE);
-        telemetry.addData("Target Degrees", targetAngleDegrees());
-        telemetry.addData("Power", rotationMotor.getPower());
-        telemetry.addData("At Position", rotationAtPosition());
-        telemetry.addData("Horizontal Target Inches", hExtensionTargetInches);
-        telemetry.addData("Vertical Target Inches", vExtensionTargetInches);
-    }
-
-    public void debugCurrent() {
-        double extensionCurrent = leaderExtensionMotor.getCurrent(CurrentUnit.AMPS)
-                                + followerExtensionMotor.getCurrent(CurrentUnit.AMPS);
-        double rotationCurrent  = rotationMotor.getCurrent(CurrentUnit.AMPS);
-
-        telemetry.addLine("----- Current (AMPS) -----");
-        telemetry.addData("Extension", extensionCurrent);
-        telemetry.addData("Rotation", rotationCurrent);
-        telemetry.addData("Total", extensionCurrent + rotationCurrent);
-    }
 
     // ---------------------------------------------------------------------------------------------
     // State Enums

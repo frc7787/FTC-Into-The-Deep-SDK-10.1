@@ -7,11 +7,13 @@ import com.qualcomm.robotcore.hardware.Gamepad;
 import org.firstinspires.ftc.teamcode.roadrunner.DriveMode;
 import org.firstinspires.ftc.teamcode.roadrunner.MecanumDrive;
 import org.firstinspires.ftc.teamcode.subsystems.arm.Arm;
+import org.firstinspires.ftc.teamcode.subsystems.arm.ArmDebug;
 
 @TeleOp(group="$")
 public class TeleOpMain extends OpMode {
     private MecanumDrive drive;
     private Arm arm;
+    private ArmDebug armDebug;
 
     private final double INTAKE_OPEN_POSITION = 0.50;
     private final double INTAKE_SUB_PRIMED_POSITION = 0.35;
@@ -46,7 +48,8 @@ public class TeleOpMain extends OpMode {
         drive = new MecanumDrive.Builder(hardwareMap)
                 .setDriveMode(DriveMode.ROBOT_CENTRIC)
                 .build();
-        arm = new Arm(this);
+        arm = new Arm(hardwareMap);
+        armDebug = new ArmDebug(arm, telemetry);
         previousGamepad2 = new Gamepad();
         currentGamepad2 = new Gamepad();
         previousGamepad1 = new Gamepad();
@@ -61,7 +64,7 @@ public class TeleOpMain extends OpMode {
         previousGamepad1.copy(currentGamepad1);
         currentGamepad1.copy(gamepad1);
 
-        double leftStickY = gamepad1.left_stick_y * -1.0;
+        double leftStickY = gamepad1.left_stick_y;
         double leftStickX = gamepad1.left_stick_x;
         double rightStickX = gamepad1.right_stick_x;
 
@@ -84,69 +87,69 @@ public class TeleOpMain extends OpMode {
             case NEUTRAL:
                 gamepad2.stopRumble();
                 if (gamepad2.triangle) {
-                    arm.setTargetPositionInchesRobotCentric(BUCKET_HORIZONTAL_POSITION, BUCKET_VERTICAL_POSITION);
+                    arm.setTargetInchesRobotCentric(BUCKET_HORIZONTAL_POSITION, BUCKET_VERTICAL_POSITION + 2);
                 } else if (gamepad2.square) {
-                    arm.setTargetPositionInchesRobotCentric(BAR_HORIZONTAL_POSITION, BAR_VERTICAL_POSITION);
+                    arm.setTargetInchesRobotCentric(BAR_HORIZONTAL_POSITION, BAR_VERTICAL_POSITION);
                 } else if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
-                    arm.setTargetPositionInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
+                    arm.setTargetInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
                     arm.setIntakePosition(INTAKE_SUB_PRIMED_POSITION);
                     armState = ArmState.SUB;
                 } else if (gamepad2.dpad_left) {
-                    arm.setTargetPositionInchesRobotCentric(GROUND_HORIZONTAL_POSITION, GROUND_VERTICAL_POSITION);
+                    arm.setTargetInchesRobotCentric(GROUND_HORIZONTAL_POSITION, GROUND_VERTICAL_POSITION);
                 } else if (gamepad2.circle) {
-                    arm.setTargetPositionInches(9.8, 6);
+                    arm.setTargetInches(9.8, 6.0);
                 } else if (gamepad2.cross) {
-                    arm.setTargetPositionInchesRobotCentric(-3, 20);
+                    arm.setTargetInchesRobotCentric(-3.0, 20.0);
                 } else if (gamepad2.dpad_up) {
-                    arm.setTargetPositionInches(9.8, 8.5);
+                    arm.setTargetInches(9.8, 8.5);
                 } else if (gamepad2.dpad_down) {
-                    arm.setTargetPositionInchesRobotCentric(1.5, 18);
+                    arm.setTargetInchesRobotCentric(1.5, 18.0);
                 } else {
                     double gamepadleftX = gamepad2.left_stick_x;
                     double gamepadleftY = -gamepad2.left_stick_y;
 
-                    if (Math.abs(gamepadleftX) < 0.1) gamepadleftX = 0;
-                    if (Math.abs(gamepadleftY) < 0.2) gamepadleftY = 0;
+                    if (Math.abs(gamepadleftX) < 0.1) gamepadleftX = 0.0;
+                    if (Math.abs(gamepadleftY) < 0.2) gamepadleftY = 0.0;
 
-                    arm.manualControlCartesian(gamepadleftX, gamepadleftY, 10);
+                    arm.manualControlCartesian(gamepadleftX, gamepadleftY, 10.0);
                 }
                 break;
             case SUB:
                 gamepad2.rumble(Gamepad.RUMBLE_DURATION_CONTINUOUS);
-                arm.setIntakePosition(INTAKE_SUB_PRIMED_POSITION);
+
+                if (arm.verticalInches() < 1.6) arm.setIntakePosition(INTAKE_OPEN_POSITION);
 
                 if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
-                    arm.setTargetPositionInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
+                    arm.setTargetInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
                     armState = ArmState.NEUTRAL;
                     arm.setIntakePosition(INTAKE_CLOSED_POSITION);
                 } else {
+                    if (gamepad1.dpad_up) arm.setIntakePosition(INTAKE_CLOSED_POSITION);
+
                     if (currentGamepad1.dpad_up && !previousGamepad1.dpad_up) {
-                       arm.setTargetPositionInches(arm.hExtensionTargetInches(), 1);
+                        arm.setVerticalTargetInches(1);
+                        telemetry.addLine("Up!");
                     } else if (currentGamepad1.dpad_down && !previousGamepad1.dpad_down) {
-                        arm.setTargetPositionInches(arm.hExtensionTargetInches(), -5);
+                        arm.setVerticalTargetInches(-6);
+                        telemetry.addLine("Down!");
+                    } else {
+                        double xInput = -gamepad1.right_stick_y;
+
+                        if (Math.abs(xInput) > 0.05) {
+                            arm.manualControlSub(-gamepad1.right_stick_y, 5);
+                        }
                     }
-                    double gamepadleftX = gamepad1.right_trigger - gamepad1.left_trigger;
-                    double gamepadleftY = -gamepad1.right_stick_y;
 
-                    if (Math.abs(gamepadleftX) < 0.1) gamepadleftX = 0;
-                    if (Math.abs(gamepadleftY) < 0.2) gamepadleftY = 0;
-
-                    arm.manualControlCartesian(gamepadleftY, gamepadleftX, 10);
                 }
                 break;
         }
 
-
-
-        telemetry.addData("Servo Position", arm.intakePosition());
-        telemetry.addData("Arm State", armState);
-        arm.debugPosition();
-        arm.debugGlobal();
+        armDebug.intake();
+        armDebug.cartesianPosition();
         arm.update();
     }
 
     private enum ArmState {
-        INTAKING,
         HOMING,
         NEUTRAL,
         SUB

@@ -17,7 +17,7 @@ public class Bucket extends LinearOpMode {
     private final Pose2d initialPose = new Pose2d(-8, -62, Math.PI / 2);
 
     @Override public void runOpMode() {
-        Arm arm = new Arm(this);
+        Arm arm = new Arm(hardwareMap);
         ElapsedTime elapsedTime = new ElapsedTime();
 
         MecanumDrive drive = new MecanumDrive.Builder(hardwareMap)
@@ -71,7 +71,7 @@ public class Bucket extends LinearOpMode {
             arm.update();
         }
 
-        arm.setTargetPositionInchesRobotCentric(1.5, 24.5);
+        arm.setTargetInchesRobotCentric(1.5, 24.5);
         elapsedTime.reset();
 
         while (!arm.isAtPosition() || elapsedTime.seconds() > 5.0) {
@@ -83,7 +83,6 @@ public class Bucket extends LinearOpMode {
 
         Actions.runBlocking(startToBar);
 
-        arm.setExtensionTargetPosition(3);
         arm.setMaxSpeed(0.4);
         elapsedTime.reset();
 
@@ -96,7 +95,7 @@ public class Bucket extends LinearOpMode {
 
         Actions.runBlocking(barToBuckets);
 
-        arm.setTargetPositionInchesRobotCentric(8, 5);
+        arm.setTargetInchesRobotCentric(8, 5);
         arm.setMaxSpeed(1.0);
 
         elapsedTime.reset();

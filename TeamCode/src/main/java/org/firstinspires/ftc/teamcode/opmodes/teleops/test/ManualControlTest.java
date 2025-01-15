@@ -4,23 +4,21 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
 import org.firstinspires.ftc.teamcode.subsystems.arm.Arm;
+import org.firstinspires.ftc.teamcode.subsystems.arm.ArmDebug;
 
 @TeleOp
-public class ExtensionMotorTest extends OpMode {
+public class ManualControlTest extends OpMode {
     private Arm arm;
+    private ArmDebug armDebug;
 
     @Override public void init() {
-        arm = new Arm(this);
+        arm = new Arm(hardwareMap);
+        armDebug = new ArmDebug(arm, telemetry);
     }
 
     @Override public void loop() {
-        if (gamepad1.dpad_up) {
-            arm.setTargetPositionInchesRobotCentric(10, 10);
-        } else if (gamepad1.dpad_left) {
-            arm.setTargetPositionInchesRobotCentric(-2.0, 7);
-        }
-
+        arm.manualControlSub(gamepad1.left_stick_y, 3.0);
         arm.update();
-        arm.debugPosition();
+        armDebug.position();
     }
 }

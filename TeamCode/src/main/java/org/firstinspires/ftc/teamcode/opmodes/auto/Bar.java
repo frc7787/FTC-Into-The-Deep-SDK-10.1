@@ -29,7 +29,7 @@ public class Bar extends LinearOpMode {
     private final double PICKUP_VERTICAL_INCHES = 8.5;
 
     @Override public void runOpMode() {
-        Arm arm = new Arm(this);
+        Arm arm = new Arm(hardwareMap);
         ElapsedTime elapsedTime = new ElapsedTime();
 
         MecanumDrive drive = new MecanumDrive.Builder(hardwareMap)

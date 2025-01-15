@@ -25,12 +25,10 @@ public final class MoveArmToPositionAction implements Action {
 
     @Override public boolean run(@NonNull TelemetryPacket telemetryPacket) {
         if (!initialized) {
-            arm.setTargetPositionInchesRobotCentric(horizontalInches, verticalInches);
+            arm.setTargetInchesRobotCentric(horizontalInches, verticalInches);
             initialized = true;
         }
         arm.update();
-        arm.debugGlobal();
-        arm.debugPosition();
 
         boolean isFinished = !arm.isAtPosition();
 

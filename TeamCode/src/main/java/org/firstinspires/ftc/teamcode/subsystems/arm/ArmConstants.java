@@ -17,8 +17,8 @@ class ArmConstants {
     static final double MAX_ROTATION_POWER  = 1.0;
     static final double MIN_ROTATION_POWER  = -1.0;
 
-    static final double EXTENSION_HOMING_POWER = -0.8;
-    static final double ROTATION_HOMING_POWER  = -0.6;
+    static final double EXTENSION_HOMING_POWER = -1.0;
+    static final double ROTATION_HOMING_POWER  = -1.0;
 
     static final int EXTENSION_POSITION_THRESHOLD = 150;
     static final int EXTENSION_NEGATIVE_THRESHOLD = (int) (2 / 1.5 * EXTENSION_POSITION_THRESHOLD);
@@ -26,5 +26,5 @@ class ArmConstants {
 
     static final double DEFAULT_MANUAL_SPEED = 2; // In/Sec
 
-    static final double[] START_POSITION_XY = new double[]{11.0, 0.0};
+    static final double[] START_POSITION_XY = new double[]{12.0, 1.0};
 }

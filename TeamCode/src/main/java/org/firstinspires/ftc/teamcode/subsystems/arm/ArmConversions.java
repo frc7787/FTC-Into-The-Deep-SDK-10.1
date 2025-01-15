@@ -6,8 +6,12 @@ import static org.firstinspires.ftc.teamcode.subsystems.arm.ArmConstants.*;
 
 class ArmConversions {
 
-    static int rotationDegreesToTicks(double degrees) {
+    static int rotationDegreesToTicksCorrected(double degrees) {
         return (int) ((degrees + 11) * ROTATION_TICKS_PER_DEGREE) + 194;
+    }
+
+    static int rotationDegreesToTicksRaw(double degrees) {
+        return (int) (degrees * ROTATION_TICKS_PER_DEGREE);
     }
 
     static int extensionInchesToTicks(double inches) {
@@ -15,6 +19,7 @@ class ArmConversions {
     }
 
     @NonNull static double[] cartesianToPolar(double xInches, double yInches) {
+
         double extensionInches = Math.sqrt(
                 Math.pow(xInches, 2.0) +
                 Math.pow(yInches, 2.0) +

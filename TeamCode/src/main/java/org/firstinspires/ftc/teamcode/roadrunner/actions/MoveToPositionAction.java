@@ -34,7 +34,7 @@ public class MoveToPositionAction implements Action {
     @Override public boolean run(@NonNull TelemetryPacket telemetryPacket) {
         if (isFirstIteration) {
             elapsedTime.reset();
-            arm.setTargetPositionInchesRobotCentric(targetVerticalInches, targetHorizontalInches);
+            arm.setTargetInchesRobotCentric(targetVerticalInches, targetHorizontalInches);
             isFirstIteration = false;
         }
         arm.update();
