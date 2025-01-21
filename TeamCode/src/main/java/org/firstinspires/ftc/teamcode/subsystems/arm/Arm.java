@@ -294,6 +294,55 @@ public class Arm {
     }
 
     /**
+     * Sets the arm to manual mode. Only works if the arm is in the {@link ArmState#POSITION} state.
+     */
+    public void setManualMode() {
+       if (armState != ArmState.POSITION) return;
+       armState = ArmState.MANUAL;
+    }
+
+    /**
+     * Sets the arm to position mode. Only works if the arm is in the {@link ArmState#MANUAL} state.
+     */
+    public void setPositionMode() {
+        if (armState != ArmState.MANUAL) return;
+        armState = ArmState.MANUAL_TO_POSITION;
+    }
+
+    /**
+     * Manual control for the arm. The inputs to this function will be ignored if the arm state is
+     * not {@link ArmState#MANUAL}. To set the arm to the manual state, call {@link Arm}.
+     * @param rotationInput The power to give the rotation motor
+     * @param extensionInput The power to give the extension motors
+     */
+    public void manualControl(double rotationInput, double extensionInput) {
+        if (armState != ArmState.MANUAL) return;
+
+        manualRotationPower = Range.clip(rotationInput, -1.0, 1.0);
+        manualExtensionPower = Range.clip(extensionInput , -1.0, 1.0);
+    }
+
+    /**
+     * Manual control for the extension of the arm. The input to this function will be ignored if
+     * the arm state is not {@link ArmState#MANUAL}. To set the arm to the manual state, call
+     * {@link Arm#setManualMode()}.
+     * @param extensionInput The power to give the extension motors
+     */
+    public void manualControlExtension(double extensionInput) {
+        manualControl(manualRotationPower, extensionInput);
+    }
+
+    /**
+     * Manual control for the rotation of the arm. The input to this function will be ignored if
+     * the arm state is not {@link ArmState#MANUAL}. To set the arm to the manual state, call
+     * {@link Arm#setManualMode()}.
+     * @param rotationInput The power to give the rotation motor
+     */
+    public void manualControlRotation(double rotationInput) {
+        manualControl(rotationInput, manualExtensionPower);
+    }
+
+    /**
      * Sets the target inches relative to the rotation point of the robot, in this case the center
      * of the arm. If the state of the arm is manual the target position will be ignored.
      * @param horizontalTargetInches How many inches out to move the arm
@@ -326,7 +375,6 @@ public class Arm {
      */
     public void setVerticalTargetInches(double verticalTargetInches) {
         setTargetInches(this.horizontalTargetInches, verticalTargetInches);
-
     }
 
     /**
