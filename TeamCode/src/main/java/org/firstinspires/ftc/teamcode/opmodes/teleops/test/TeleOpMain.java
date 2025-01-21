@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode.opmodes.teleops.test;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.teamcode.roadrunner.DriveMode;
@@ -87,7 +88,7 @@ public class TeleOpMain extends OpMode {
             case NEUTRAL:
                 gamepad2.stopRumble();
                 if (gamepad2.triangle) {
-                    arm.setTargetInchesRobotCentric(BUCKET_HORIZONTAL_POSITION, BUCKET_VERTICAL_POSITION + 2);
+                    arm.setTargetInchesRobotCentric(BUCKET_HORIZONTAL_POSITION, BUCKET_VERTICAL_POSITION + 0.5);
                 } else if (gamepad2.square) {
                     arm.setTargetInchesRobotCentric(BAR_HORIZONTAL_POSITION, BAR_VERTICAL_POSITION);
                 } else if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
@@ -117,25 +118,25 @@ public class TeleOpMain extends OpMode {
             case SUB:
                 gamepad2.rumble(Gamepad.RUMBLE_DURATION_CONTINUOUS);
 
-                if (arm.verticalInches() < 1.6) arm.setIntakePosition(INTAKE_OPEN_POSITION);
+                if (arm.verticalInches() < 1.6) {
+                    arm.setIntakePosition(INTAKE_OPEN_POSITION);
+                } else {
+                    arm.setIntakePosition(INTAKE_CLOSED_POSITION);
+                }
 
                 if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
                     arm.setTargetInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
                     armState = ArmState.NEUTRAL;
                     arm.setIntakePosition(INTAKE_CLOSED_POSITION);
                 } else {
-                    if (gamepad1.dpad_up) arm.setIntakePosition(INTAKE_CLOSED_POSITION);
-
                     if (currentGamepad1.dpad_up && !previousGamepad1.dpad_up) {
                         arm.setVerticalTargetInches(1);
-                        telemetry.addLine("Up!");
                     } else if (currentGamepad1.dpad_down && !previousGamepad1.dpad_down) {
-                        arm.setVerticalTargetInches(-6);
-                        telemetry.addLine("Down!");
+                        arm.setVerticalTargetInches(-4);
                     } else {
                         double xInput = -gamepad1.right_stick_y;
 
-                        if (Math.abs(xInput) > 0.05) {
+                        if (Math.abs(xInput) > 0.1) {
                             arm.manualControlSub(-gamepad1.right_stick_y, 5);
                         }
                     }
@@ -145,6 +146,7 @@ public class TeleOpMain extends OpMode {
         }
 
         armDebug.intake();
+        armDebug.position();
         armDebug.cartesianPosition();
         arm.update();
     }

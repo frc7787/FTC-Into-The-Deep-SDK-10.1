@@ -21,13 +21,9 @@ public class Arm {
     // Hardware
     // ---------------------------------------------------------------------------------------------
 
-    final DcMotorImplEx leaderExtensionMotor,
-                                followerExtensionMotor,
-                                rotationMotor;
+    final DcMotorImplEx leaderExtensionMotor, followerExtensionMotor, rotationMotor;
 
-    final RevTouchSensor frontRotationLimitSwitch,
-                                 backRotationLimitSwitch,
-                                 extensionLimitSwitch;
+    final RevTouchSensor frontRotationLimitSwitch, backRotationLimitSwitch, extensionLimitSwitch;
 
     final Servo intakeServo;
 
@@ -42,6 +38,8 @@ public class Arm {
     int rotationPosition, extensionPosition;
     double verticalTargetInches, horizontalTargetInches;
 
+    double manualExtensionPower, manualRotationPower;
+
     double maxSpeed;
 
     boolean isFirstManualControlIteration;
@@ -53,7 +51,7 @@ public class Arm {
     // ---------------------------------------------------------------------------------------------
 
     private final PIDController extensionController
-            = new PIDController(0.00135, 0, 0.0001);
+            = new PIDController(0.00133, 0, 0.0001);
 
     private final PIDController rotationController
             = new PIDController(0.0092, 0, 0.000012);
@@ -83,6 +81,9 @@ public class Arm {
         extensionTargetPosition = 0;
         rotationTargetPosition  = 0;
 
+        manualExtensionPower = 0.0;
+        manualRotationPower = 0.0;
+
         maxSpeed = MAX_EXTENSION_POWER;
 
         horizontalTargetInches = START_POSITION_XY[0];
@@ -93,6 +94,7 @@ public class Arm {
         isFirstManualControlIteration = true;
         manualControlTimer = new ElapsedTime();
         manualControlTimer.reset();
+
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -103,16 +105,42 @@ public class Arm {
         rotationPosition = rotationMotor.getCurrentPosition();
         extensionPosition = leaderExtensionMotor.getCurrentPosition();
 
+        double rotationPower, extensionPower;
+
         switch (armState) {
             case HOMING:
                 home();
                 break;
-            case NORMAL:
-                double rotationPower
-                        = rotationController.calculate(rotationPosition, rotationTargetPosition);
+            case MANUAL:
+                rotationPower = manualRotationPower;
+                extensionPower = manualExtensionPower;
+
+                if (frontRotationLimitSwitch.isPressed() && rotationPower > 0.0) rotationPower = 0.0;
+                if (backRotationLimitSwitch.isPressed() && rotationPower < 0.0) rotationPower = 0.0;
+
+                if (extensionLimitSwitch.isPressed() && extensionPower <= 0.0) extensionPower = 0.0;
+
+                rotationMotor.setPower(manualRotationPower);
+                leaderExtensionMotor.setPower(manualExtensionPower);
+                followerExtensionMotor.setPower(manualExtensionPower);
+
+                // TODO implement sketchy extension limiting code involving automatic extension /
+                //      rotation if the arm goes too close (maybe around 2 inches) of the extension
+                //      limit.
+                break;
+            case MANUAL_TO_POSITION:
+                rotationMotor.setPower(0.0);
+                leaderExtensionMotor.setPower(0.0);
+                followerExtensionMotor.setPower(0.0);
+
+                rotationTargetPosition = rotationMotor.getCurrentPosition();
+                extensionTargetPosition = leaderExtensionMotor.getCurrentPosition();
+
+                armState = ArmState.POSITION;
+            case POSITION:
+                rotationPower = rotationController.calculate(rotationPosition, rotationTargetPosition);
                 rotationPower = Range.clip(rotationPower, MIN_ROTATION_POWER, MAX_ROTATION_POWER);
-                double extensionPower
-                        = extensionController.calculate(extensionPosition, extensionTargetPosition);
+                extensionPower = extensionController.calculate(extensionPosition, extensionTargetPosition);
                 extensionPower = Range.clip(extensionPower, MIN_EXTENSION_POWER, maxSpeed);
 
                 if (extensionTargetPosition <= 0 && extensionLimitSwitch.isPressed()) {
@@ -120,10 +148,6 @@ public class Arm {
                 }
 
                 if (rotationTargetPosition <= 0 && frontRotationLimitSwitch.isPressed()) {
-                    rotationPower = 0.0;
-                }
-
-                if (backRotationLimitSwitch.isPressed() && rotationPower >= 0.0) {
                     rotationPower = 0.0;
                 }
 
@@ -135,8 +159,15 @@ public class Arm {
                     extensionPower = 0.0;
                 }
 
+                if (backRotationLimitSwitch.isPressed() && rotationPower >= 0.0) {
+                    rotationPower = 0.0;
+                }
+
                 if (rotationAtPosition()) rotationPower = 0.0;
                 if (extensionAtPosition()) extensionPower = 0.0;
+
+                // TODO UNTESTED
+                if (extensionLimitSwitch.isPressed() && extensionPower < 0.0) extensionPower = 0.0;
 
                 leaderExtensionMotor.setPower(extensionPower);
                 followerExtensionMotor.setPower(extensionPower);
@@ -145,6 +176,10 @@ public class Arm {
         }
     }
 
+    /**
+     * Force stops the arm, by setting the power of all the motors to be zero. Will get overwritten
+     * by subsequent calls to {@link Arm#update()}.
+     */
     public void stop() {
         rotationMotor.setPower(0);
         followerExtensionMotor.setPower(0);
@@ -158,8 +193,8 @@ public class Arm {
      * @return The calculated vertical position
      */
     private static double calculatePolynomialRegression(double xInches) {
-        return -10.2 + (2.02 * xInches) + (-0.149 * Math.pow(xInches, 2)) +
-                (4.82e-3 * Math.pow(xInches, 3)) + (-5.58e-5 * Math.pow(xInches, 4));
+        return -9.7 + (2.02 * xInches) + (-0.149 * Math.pow(xInches, 2)) +
+               (4.82e-3 * Math.pow(xInches, 3)) + (-5.58e-5 * Math.pow(xInches, 4));
     }
 
     /**
@@ -181,18 +216,17 @@ public class Arm {
 
     /**
      * Manual control flavour allowing for control of horizontal and vertical position of the arm.
-     * @param xInput Input to control the horizontal position of the arm. The regression can be
-     *               found at <a href="https://docs.google.com/spreadsheets/d/1GnF52eFFj6NZARqxjOI01XXZJkzJ-WH21ysyxr2HlAs/edit?gid=0#gid=0"></a>
+     * @param xInput Input to control the horizontal position of the arm.
      * @param yInput Input to control the vertical position of the arm
      * @param inchesPerSecond The speed to move the arm at in in/sec. Increasing this value will increase the
      *              speed at which the arm extends, however it will also increase its choppiness.
      */
     public void manualControlCartesian(double xInput, double yInput, double inchesPerSecond) {
+        manualControlTimer.reset();
         horizontalTargetInches += (xInput * manualControlTimer.seconds() * inchesPerSecond);
         verticalTargetInches += (yInput * manualControlTimer.seconds() * inchesPerSecond);
-        manualControlTimer.reset();
-        if (horizontalTargetInches > 30) horizontalTargetInches = 30;
-        if (verticalTargetInches < -5) verticalTargetInches = -5;
+        horizontalTargetInches = Math.min(horizontalTargetInches, 30);
+        verticalTargetInches = Math.max(-5, verticalTargetInches);
         double[] polarCoordinates = cartesianToPolar(horizontalTargetInches, verticalTargetInches);
         rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
         extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
@@ -251,7 +285,7 @@ public class Arm {
                 }
                 break;
             case COMPLETE:
-                armState = ArmState.NORMAL;
+                armState = ArmState.POSITION;
                 rotationTargetPosition  = 0;
                 extensionTargetPosition = 0;
                 MotorUtility.reset(rotationMotor, leaderExtensionMotor, followerExtensionMotor);
@@ -259,7 +293,15 @@ public class Arm {
         }
     }
 
+    /**
+     * Sets the target inches relative to the rotation point of the robot, in this case the center
+     * of the arm. If the state of the arm is manual the target position will be ignored.
+     * @param horizontalTargetInches How many inches out to move the arm
+     * @param verticalTargetInches How many inches up to move the arm
+     */
     public void setTargetInches(double horizontalTargetInches, double verticalTargetInches) {
+        if (armState == ArmState.MANUAL) return;
+
         if (horizontalTargetInches >= 30.0) horizontalTargetInches = 30.0;
         this.horizontalTargetInches = horizontalTargetInches;
         this.verticalTargetInches = verticalTargetInches;
@@ -268,14 +310,31 @@ public class Arm {
         extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
     }
 
+    /**
+     * Sets how many inches the arm should go out. Maintains the current vertical target inches.
+     * If the state of the arm is manual the target position will be ignored.
+     * @param horizontalTargetInches How many inches the arm should go out
+     */
     public void setHorizontalTargetInches(double horizontalTargetInches) {
         setTargetInches(horizontalTargetInches, this.verticalTargetInches);
     }
 
+    /**
+     * Sets how many inches the arm should go up. Maintains the current horizontal target inches.
+     * If the state of the arm is manual the target position will be ignored.
+     * @param verticalTargetInches How many inches the arm should go up
+     */
     public void setVerticalTargetInches(double verticalTargetInches) {
         setTargetInches(this.horizontalTargetInches, verticalTargetInches);
+
     }
 
+    /**
+     * Sets the target position of the arm relative to the ground right in front of the robot. If
+     * the state of the arm is {@link ArmState#MANUAL} the target position will be ignored.
+     * @param horizontalTargetInches How many inches to send the arm out
+     * @param verticalTargetInches How many inches to send the arm up.
+     */
     public void setTargetInchesRobotCentric(double horizontalTargetInches, double verticalTargetInches) {
         setTargetInches(
                 horizontalTargetInches + ROTATION_X_OFFSET_INCHES,
@@ -283,24 +342,50 @@ public class Arm {
         );
     }
 
+    /**
+     * Set how many inches the arm should go out relative to the front of the robot. If the state
+     * of the arm is {@link ArmState#MANUAL} the target position will be ignored.
+     * @param horizontalTargetInches How many inches the arm should go out
+     */
     public void setHorizontalTargetInchesRobotCentric(double horizontalTargetInches) {
         setTargetInches(horizontalTargetInches + ROTATION_X_OFFSET_INCHES, this.verticalTargetInches);
     }
 
+    /**
+     * Sets how many inches the arm should go up relative to the ground. If the state of the arm is
+     * {@link ArmState#MANUAL} the target position will be ignored.
+     * @param verticalTargetInches How many inches the arm should go up
+     */
     public void setVerticalTargetInchesRobotCentric(double verticalTargetInches) {
         setTargetInches(this.horizontalTargetInches, verticalTargetInches + ROTATION_Y_OFFSET_INCHES);
     }
 
+    /**
+     * Sets the position of the intake
+     * @param position The position to set the intake
+     */
     public void setIntakePosition(double position) {
         intakeServo.setPosition(position);
     }
 
+    /**
+     * Sets the intake to the zero position
+     */
     public void zeroIntake() { intakeServo.setPosition(0.0); }
 
+    /**
+     * Sets the max speed for the next movement.
+     * @param speed The speed to set
+     */
     public void setMaxSpeed(double speed) {
         maxSpeed = Range.clip(speed, 0.0, 1.0);
     }
 
+    /**
+     * Override the state machine and manually set power to the motors
+     * @param extensionPower The power to give the extension motors
+     * @param rotationPower The power to give the rotation motor
+     */
     public void setPowersManual(double extensionPower, double rotationPower) {
         leaderExtensionMotor.setPower(extensionPower);
         followerExtensionMotor.setPower(extensionPower);
@@ -311,71 +396,153 @@ public class Arm {
     // Getters
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * @return The current state of the arm
+     */
     public ArmState state() { return armState; }
 
+    /**
+     * @return The horizontal target inches, relative to the center of rotation of the arm
+     */
     public double horizontalTargetInches() {
         return horizontalTargetInches;
     }
 
-    public double verticalTargetInches() {
-        return verticalTargetInches;
+    /**
+     * @return The horizontal target inches, relative to the front of the robot.
+     */
+    public double horizontalTargetInchesRobotCentric() {
+        return horizontalTargetInches + ROTATION_X_OFFSET_INCHES;
     }
 
+    /**
+     * @return The vertical target inches, relative to the center of rotation of the arm
+     */
+    public double verticalTargetInches() { return verticalTargetInches; }
+
+    /**
+     * @return The vertical target inches, relative to the ground.
+     */
+    public double verticalTargetInchesRobotCentric() {
+        return verticalTargetInches + ROTATION_Y_OFFSET_INCHES;
+    }
+
+    /**
+     * @return The current position of the rotation motor
+     */
     public int rotationPosition() {
         return rotationMotor.getCurrentPosition();
     }
 
+    /**
+     * @return The current port of the leader extension motor
+     */
     public int extensionPosition() {
         return leaderExtensionMotor.getCurrentPosition();
     }
 
+    /**
+     * @return The current degrees of the arm
+     */
     public double degrees() {
         return rotationMotor.getCurrentPosition() / ROTATION_TICKS_PER_DEGREE ;
     }
 
+    /**
+     * @return How many inches the arm is extended out
+     */
     public double inches() {
         return (leaderExtensionMotor.getCurrentPosition() / EXTENSION_TICKS_PER_INCH);
     }
 
+    /**
+     * @return How many inches the arm is out, relative to the center of rotation of the arm
+     */
     public double horizontalInches() {
         return cartesianToPolar(degrees(), inches())[0];
     }
 
+    /**
+     * @return How many inches the arm is out, relative to the front of the robot
+     */
+    public double horizontalInchesRobotCentric() {
+        return cartesianToPolar(degrees(), inches())[0] + ROTATION_X_OFFSET_INCHES;
+    }
+
+    /**
+     * @return How many inches the arm is up, relative to the center of rotation of the arm
+     */
     public double verticalInches() {
         return polarToCartesian(degrees(), inches())[1];
     }
 
+    /**
+     * @return How many inches the ram is up, relative to the ground.
+     */
+    public double verticalInchesRobotCentric() {
+        return polarToCartesian(degrees(), inches())[1] + ROTATION_Y_OFFSET_INCHES;
+    }
+
+    /**
+     * @return The position of the intake
+     */
     public double intakePosition() {
         return intakeServo.getPosition();
     }
 
+    /**
+     * @return The rotation target position (in ticks)
+     */
     public int rotationTargetPosition() { return rotationTargetPosition; }
 
+    /**
+     * @return The extension target position (in ticks)
+     */
     public int extensionTargetPosition() { return extensionTargetPosition; }
 
-    public double targetDegrees() {
+    /**
+     * @return The target angle of the arm, in degrees
+     */
+    public double targetAngleDegrees() {
         return rotationTargetPosition / ROTATION_TICKS_PER_DEGREE;
     }
 
-    public double targetInches() {
+    /**
+     * @return The target extension of the arm, in inches
+     */
+    public double targetExtensionInches() {
         return extensionTargetPosition / EXTENSION_TICKS_PER_INCH;
     }
 
-    public double amps() {
+    /**
+     * @return The total current draw of the arm motors. This includes both extension motors, and
+     *         the rotation motor. 
+     */
+    public double currentAmps() {
         return leaderExtensionMotor.getCurrent(CurrentUnit.AMPS)
                + followerExtensionMotor.getCurrent(CurrentUnit.AMPS)
                + rotationMotor.getCurrent(CurrentUnit.AMPS);
     }
 
+    /**
+     * @return Whether the rotation is withing the target tolerance.
+     */
     public boolean rotationAtPosition() {
-        return Math.abs(rotationPosition - rotationTargetPosition) <= ROTATION_POSITION_THRESHOLD;
+        return Math.abs(rotationPosition - rotationTargetPosition) <= ROTATION_POSITION_TOLERANCE;
     }
 
+    /**
+     * @return Whether the extension is within the target tolerance
+     */
     public boolean extensionAtPosition() {
-        return extensionPosition <= EXTENSION_POSITION_THRESHOLD + extensionTargetPosition
-                && extensionPosition >= -EXTENSION_NEGATIVE_THRESHOLD + extensionTargetPosition;
+        return extensionPosition <= EXTENSION_POSITION_TOLERANCE + extensionTargetPosition
+               && extensionPosition >= -EXTENSION_POSITION_NEGATIVE_TOLERANCE
+               + extensionTargetPosition;
     }
 
+    /**
+     * @return Whether both the rotation and extension are within target tolerance.
+     */
     public boolean isAtPosition() { return rotationAtPosition() && extensionAtPosition(); }
 
     // ---------------------------------------------------------------------------------------------
@@ -383,8 +550,30 @@ public class Arm {
     // ---------------------------------------------------------------------------------------------
 
     public enum ArmState {
+        /**
+         * State to represent the beginning of the match when the robot has not yet determined
+         * its position. Only has one transition, to {@link ArmState#POSITION} which is successfully
+         * completing the homing sequence
+         */
         HOMING,
-        NORMAL,
+        /**
+         * State to represent the arm in it's default state, moving to whatever the current target
+         * position. This state can be transitioned to from {@link ArmState#HOMING} and
+         * {@link ArmState#MANUAL_TO_POSITION}. Can transition to {@link ArmState#MANUAL_TO_POSITION}
+         */
+        POSITION,
+        /**
+         * State to represent manual control of the arm. While the arm is in this state it accepts
+         * powers as inputs, and any target position commands will NOT be stored for later. The only
+         * transition out of this state is {@link ArmState#MANUAL_TO_POSITION} as cleanup must be done
+         * to ensure proper functioning of the arm.
+         */
+        MANUAL,
+        /**
+         * Transition state from manual to position control responsible. This state will only be
+         * called once on transition from {@link ArmState#MANUAL} to {@link ArmState#POSITION}
+         */
+        MANUAL_TO_POSITION
     }
 
     public enum HomingState {

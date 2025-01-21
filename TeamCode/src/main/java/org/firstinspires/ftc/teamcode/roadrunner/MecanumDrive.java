@@ -62,9 +62,9 @@ public class MecanumDrive {
     public static double TRACK_WIDTH_TICKS = 5899.0;
 
     // Feedforward Parameters (ticks)
-    public static double KS = 1.40;
+    public static double KS = 1.20;
     // Weird behaviour had to turn down originally calculated 0.00257
-    public static double KV = 0.000207;
+    public static double KV = 0.000205;
     // Bad deceleration cannot tune higher
     public static double KA = 0.00006;
 

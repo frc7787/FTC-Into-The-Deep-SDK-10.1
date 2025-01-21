@@ -17,6 +17,6 @@ public class HomeArmAction implements Action {
     @Override public boolean run(@NonNull TelemetryPacket telemetryPacket) {
         arm.update();
 
-        return arm.state() != Arm.ArmState.NORMAL;
+        return arm.state() != Arm.ArmState.POSITION;
     }
 }

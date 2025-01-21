@@ -46,7 +46,7 @@ public class MecanumDriveBaseTest extends OpMode {
             driveBase.drive(1.0, 0, 0);
         }
 
-        if (elapsedTime.seconds() > 1.5) {
+        if (elapsedTime.seconds() > 0.5) {
             driveBase.drive(0,0,0);
             if (!fileSaved && velocity == 0) {
                 fileSaved = true;

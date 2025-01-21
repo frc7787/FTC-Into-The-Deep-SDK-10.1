@@ -20,9 +20,9 @@ class ArmConstants {
     static final double EXTENSION_HOMING_POWER = -1.0;
     static final double ROTATION_HOMING_POWER  = -1.0;
 
-    static final int EXTENSION_POSITION_THRESHOLD = 150;
-    static final int EXTENSION_NEGATIVE_THRESHOLD = (int) (2 / 1.5 * EXTENSION_POSITION_THRESHOLD);
-    static final int ROTATION_POSITION_THRESHOLD  = 36;
+    static final int EXTENSION_POSITION_TOLERANCE = 150;
+    static final int EXTENSION_POSITION_NEGATIVE_TOLERANCE = (int) (2 / 1.5 * EXTENSION_POSITION_TOLERANCE);
+    static final int ROTATION_POSITION_TOLERANCE = 36;
 
     static final double DEFAULT_MANUAL_SPEED = 2; // In/Sec
 
