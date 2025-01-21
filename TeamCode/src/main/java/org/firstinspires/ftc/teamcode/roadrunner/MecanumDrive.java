@@ -57,9 +57,9 @@ public class MecanumDrive {
     // ---------------------------------------------------------------------------------------------
 
     // Drive Model Parameters
-    public static double INCHES_PER_TICK = 0.0019696;
+    public static double INCHES_PER_TICK = 0.0019696; // TICKS_PER_INCH = 507.717
     public static double LATERAL_INCHES_PER_TICK = INCHES_PER_TICK;
-    public static double TRACK_WIDTH_TICKS = 5899.0;
+    public static double TRACK_WIDTH_TICKS = 6896.0; // OLD = 5899
 
     // Feedforward Parameters (ticks)
     public static double KS = 1.20;

@@ -30,14 +30,14 @@ public final class ArmDebug {
         telemetry.addData("Position", arm.leaderExtensionMotor.getCurrentPosition());
         telemetry.addData("Target Position", arm.extensionTargetPosition);
         telemetry.addData("Inches", arm.inches());
-        telemetry.addData("Target Inches", arm.targetExtensionInches());
+        telemetry.addData("Target Inches", arm.extensionTargetInches());
         telemetry.addData("Power", arm.leaderExtensionMotor.getPower());
         telemetry.addData("At Position", arm.extensionAtPosition());
         telemetry.addLine("----- Rotation -----");
         telemetry.addData("Position", arm.rotationMotor.getCurrentPosition());
         telemetry.addData("Target Position", arm.rotationTargetPosition);
         telemetry.addData("Degrees", arm.degrees());
-        telemetry.addData("Target Degrees", arm.targetAngleDegrees());
+        telemetry.addData("Target Degrees", arm.rotationTargetDegrees());
         telemetry.addData("Power", arm.rotationMotor.getPower());
         telemetry.addData("At Position", arm.rotationAtPosition());
         telemetry.addData("Horizontal Target Inches", arm.horizontalTargetInches);

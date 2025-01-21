@@ -17,8 +17,20 @@ public class ManualControlTest extends OpMode {
     }
 
     @Override public void loop() {
-        arm.manualControlSub(gamepad1.left_stick_y, 3.0);
         arm.update();
-        armDebug.position();
+
+        double rotationInput = gamepad1.left_stick_y;
+        double extensionInput = gamepad1.right_stick_y;
+
+        if (Math.abs(rotationInput) > 0.0 && Math.abs(extensionInput) > 0.0) {
+            arm.setManualMode();
+            arm.manualControl(rotationInput, extensionInput);
+        } else {
+            arm.setPositionMode();
+
+            if (gamepad1.dpad_left) {
+                arm.setTargetInchesRobotCentric(5, 5);
+            }
+        }
     }
 }

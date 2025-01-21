@@ -36,7 +36,10 @@ public class Arm {
 
     int rotationTargetPosition, extensionTargetPosition;
     int rotationPosition, extensionPosition;
-    double verticalTargetInches, horizontalTargetInches;
+
+    double extensionInches, rotationDegrees, extensionTargetInches, rotationTargetDegrees;
+
+    double verticalTargetInches, horizontalTargetInches, verticalInches, horizontalInches;
 
     double manualExtensionPower, manualRotationPower;
 
@@ -102,8 +105,7 @@ public class Arm {
     // ---------------------------------------------------------------------------------------------
 
     public void update() {
-        rotationPosition = rotationMotor.getCurrentPosition();
-        extensionPosition = leaderExtensionMotor.getCurrentPosition();
+        updatePositionInformation();
 
         double rotationPower, extensionPower;
 
@@ -166,7 +168,6 @@ public class Arm {
                 if (rotationAtPosition()) rotationPower = 0.0;
                 if (extensionAtPosition()) extensionPower = 0.0;
 
-                // TODO UNTESTED
                 if (extensionLimitSwitch.isPressed() && extensionPower < 0.0) extensionPower = 0.0;
 
                 leaderExtensionMotor.setPower(extensionPower);
@@ -174,6 +175,32 @@ public class Arm {
                 rotationMotor.setPower(rotationPower);
                 break;
         }
+    }
+
+    /**
+     * Updates the position information about the arm.
+     */
+    public void updatePositionInformation() {
+        extensionPosition = leaderExtensionMotor.getCurrentPosition();
+        rotationPosition = rotationMotor.getCurrentPosition();
+
+        extensionInches = extensionPosition / EXTENSION_TICKS_PER_INCH;
+        rotationDegrees = rotationPosition / ROTATION_TICKS_PER_DEGREE;
+
+        extensionTargetInches = extensionTargetPosition / EXTENSION_TICKS_PER_INCH;
+        rotationTargetDegrees = rotationTargetPosition / ROTATION_TICKS_PER_DEGREE;
+
+        double[] cartesianPosition
+                = polarToCartesian(rotationDegrees, extensionInches);
+
+        horizontalInches = cartesianPosition[0];
+        verticalInches = cartesianPosition[1];
+
+        double[] cartesianTargetPosition
+                = polarToCartesian(rotationTargetDegrees, extensionTargetInches);
+
+        horizontalTargetInches = cartesianTargetPosition[0];
+        verticalTargetInches = cartesianTargetPosition[1];
     }
 
     /**
@@ -198,35 +225,17 @@ public class Arm {
     }
 
     /**
-     * Manual control flavour using a polynomial regression to keep the intake level while
-     * extending.
+     * Pseudo manual control using a polynomial regression to keep the intake level. Should only be
+     * used while extending in the sub.
      * @param xInput The value to control the horizontal extension of the arm
      * @param speed The speed in in/sec to move the arm at. Increasing this value will make the arm
      *              move faster, however it will also increase its choppiness.
      */
-    public void manualControlSub(double xInput, double speed) {
+    public void pseudoManualControlSub(double xInput, double speed) {
         horizontalTargetInches += (xInput * manualControlTimer.seconds() * speed);
         manualControlTimer.reset();
         horizontalTargetInches = Range.clip(horizontalTargetInches, 2.0, 30.0);
         verticalTargetInches = calculatePolynomialRegression(horizontalTargetInches);
-        double[] polarCoordinates = cartesianToPolar(horizontalTargetInches, verticalTargetInches);
-        rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
-        extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
-    }
-
-    /**
-     * Manual control flavour allowing for control of horizontal and vertical position of the arm.
-     * @param xInput Input to control the horizontal position of the arm.
-     * @param yInput Input to control the vertical position of the arm
-     * @param inchesPerSecond The speed to move the arm at in in/sec. Increasing this value will increase the
-     *              speed at which the arm extends, however it will also increase its choppiness.
-     */
-    public void manualControlCartesian(double xInput, double yInput, double inchesPerSecond) {
-        manualControlTimer.reset();
-        horizontalTargetInches += (xInput * manualControlTimer.seconds() * inchesPerSecond);
-        verticalTargetInches += (yInput * manualControlTimer.seconds() * inchesPerSecond);
-        horizontalTargetInches = Math.min(horizontalTargetInches, 30);
-        verticalTargetInches = Math.max(-5, verticalTargetInches);
         double[] polarCoordinates = cartesianToPolar(horizontalTargetInches, verticalTargetInches);
         rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
         extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
@@ -478,65 +487,51 @@ public class Arm {
     /**
      * @return The current position of the rotation motor
      */
-    public int rotationPosition() {
-        return rotationMotor.getCurrentPosition();
-    }
+    public int rotationPosition() { return rotationPosition; }
 
     /**
      * @return The current port of the leader extension motor
      */
     public int extensionPosition() {
-        return leaderExtensionMotor.getCurrentPosition();
+        return extensionPosition;
     }
 
     /**
      * @return The current degrees of the arm
      */
-    public double degrees() {
-        return rotationMotor.getCurrentPosition() / ROTATION_TICKS_PER_DEGREE ;
-    }
+    public double degrees() { return rotationDegrees; }
 
     /**
      * @return How many inches the arm is extended out
      */
-    public double inches() {
-        return (leaderExtensionMotor.getCurrentPosition() / EXTENSION_TICKS_PER_INCH);
-    }
+    public double inches() { return extensionInches; }
 
     /**
      * @return How many inches the arm is out, relative to the center of rotation of the arm
      */
-    public double horizontalInches() {
-        return cartesianToPolar(degrees(), inches())[0];
-    }
+    public double horizontalInches() { return horizontalInches; }
 
     /**
      * @return How many inches the arm is out, relative to the front of the robot
      */
     public double horizontalInchesRobotCentric() {
-        return cartesianToPolar(degrees(), inches())[0] + ROTATION_X_OFFSET_INCHES;
+        return horizontalInches + ROTATION_X_OFFSET_INCHES;
     }
 
     /**
      * @return How many inches the arm is up, relative to the center of rotation of the arm
      */
-    public double verticalInches() {
-        return polarToCartesian(degrees(), inches())[1];
-    }
+    public double verticalInches() { return verticalInches; }
 
     /**
      * @return How many inches the ram is up, relative to the ground.
      */
-    public double verticalInchesRobotCentric() {
-        return polarToCartesian(degrees(), inches())[1] + ROTATION_Y_OFFSET_INCHES;
-    }
+    public double verticalInchesRobotCentric() { return verticalInches + ROTATION_Y_OFFSET_INCHES; }
 
     /**
      * @return The position of the intake
      */
-    public double intakePosition() {
-        return intakeServo.getPosition();
-    }
+    public double intakePosition() { return intakeServo.getPosition(); }
 
     /**
      * @return The rotation target position (in ticks)
@@ -551,16 +546,14 @@ public class Arm {
     /**
      * @return The target angle of the arm, in degrees
      */
-    public double targetAngleDegrees() {
+    public double rotationTargetDegrees() {
         return rotationTargetPosition / ROTATION_TICKS_PER_DEGREE;
     }
 
     /**
      * @return The target extension of the arm, in inches
      */
-    public double targetExtensionInches() {
-        return extensionTargetPosition / EXTENSION_TICKS_PER_INCH;
-    }
+    public double extensionTargetInches() { return extensionTargetInches; }
 
     /**
      * @return The total current draw of the arm motors. This includes both extension motors, and

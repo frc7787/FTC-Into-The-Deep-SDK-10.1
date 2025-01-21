@@ -2,7 +2,6 @@ package org.firstinspires.ftc.teamcode.opmodes.teleops.test;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 import org.firstinspires.ftc.teamcode.roadrunner.DriveMode;
@@ -112,7 +111,6 @@ public class TeleOpMain extends OpMode {
                     if (Math.abs(gamepadleftX) < 0.1) gamepadleftX = 0.0;
                     if (Math.abs(gamepadleftY) < 0.2) gamepadleftY = 0.0;
 
-                    arm.manualControlCartesian(gamepadleftX, gamepadleftY, 10.0);
                 }
                 break;
             case SUB:
@@ -137,7 +135,7 @@ public class TeleOpMain extends OpMode {
                         double xInput = -gamepad1.right_stick_y;
 
                         if (Math.abs(xInput) > 0.1) {
-                            arm.manualControlSub(-gamepad1.right_stick_y, 5);
+                            arm.pseudoManualControlSub(-gamepad1.right_stick_y, 5);
                         }
                     }
 
