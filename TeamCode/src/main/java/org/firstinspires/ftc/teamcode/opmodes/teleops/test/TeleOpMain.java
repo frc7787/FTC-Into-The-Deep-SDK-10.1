@@ -144,8 +144,8 @@ public class TeleOpMain extends OpMode {
         }
 
         armDebug.intake();
-        armDebug.position();
-        armDebug.cartesianPosition();
+        armDebug.polar();
+        armDebug.cartesian();
         arm.update();
     }
 

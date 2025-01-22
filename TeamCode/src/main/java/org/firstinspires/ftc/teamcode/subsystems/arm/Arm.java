@@ -117,26 +117,30 @@ public class Arm {
                 rotationPower = manualRotationPower;
                 extensionPower = manualExtensionPower;
 
-                if (frontRotationLimitSwitch.isPressed() && rotationPower > 0.0) rotationPower = 0.0;
-                if (backRotationLimitSwitch.isPressed() && rotationPower < 0.0) rotationPower = 0.0;
+                if (frontRotationLimitSwitch.isPressed() && rotationPower < 0.0) rotationPower = 0.0;
+                if (backRotationLimitSwitch.isPressed() && rotationPower > 0.0) rotationPower = 0.0;
 
                 if (extensionLimitSwitch.isPressed() && extensionPower <= 0.0) extensionPower = 0.0;
 
-                rotationMotor.setPower(manualRotationPower);
-                leaderExtensionMotor.setPower(manualExtensionPower);
-                followerExtensionMotor.setPower(manualExtensionPower);
+                updatePositionInformation();
 
-                // TODO implement sketchy extension limiting code involving automatic extension /
-                //      rotation if the arm goes too close (maybe around 2 inches) of the extension
-                //      limit.
+                if (horizontalInchesRobotCentric() >= MAX_HORIZONTAL_INCHES_ROBOT_CENTRIC) {
+                    if (extensionPower >= 0.0) extensionPower = 0.0;
+                    if (rotationPower < 0.0) extensionPower = -0.8;
+                }
+
+                rotationMotor.setPower(rotationPower);
+                setExtensionPower(extensionPower);
+
                 break;
             case MANUAL_TO_POSITION:
                 rotationMotor.setPower(0.0);
-                leaderExtensionMotor.setPower(0.0);
-                followerExtensionMotor.setPower(0.0);
+                setExtensionPower(0.0);
 
                 rotationTargetPosition = rotationMotor.getCurrentPosition();
                 extensionTargetPosition = leaderExtensionMotor.getCurrentPosition();
+
+                updatePositionInformation();
 
                 armState = ArmState.POSITION;
             case POSITION:
@@ -170,8 +174,9 @@ public class Arm {
 
                 if (extensionLimitSwitch.isPressed() && extensionPower < 0.0) extensionPower = 0.0;
 
-                leaderExtensionMotor.setPower(extensionPower);
-                followerExtensionMotor.setPower(extensionPower);
+                if (inches() < 0.5 && extensionPower < 0.0) extensionPower = 0.0;
+
+                setExtensionPower(extensionPower);
                 rotationMotor.setPower(rotationPower);
                 break;
         }
@@ -209,8 +214,7 @@ public class Arm {
      */
     public void stop() {
         rotationMotor.setPower(0);
-        followerExtensionMotor.setPower(0);
-        leaderExtensionMotor.setPower(0);
+        setExtensionPower(0.0);
     }
 
     /**
@@ -261,15 +265,14 @@ public class Arm {
                     MotorUtility.reset(leaderExtensionMotor, followerExtensionMotor);
                     homingState = HomingState.SAFETY_EXTENSION;
                 } else {
-                    leaderExtensionMotor.setPower(EXTENSION_HOMING_POWER);
-                    followerExtensionMotor.setPower(EXTENSION_HOMING_POWER);
+                   setExtensionPower(EXTENSION_HOMING_POWER);
                 }
                 break;
             case SAFETY_EXTENSION:
                 int currentPosition = leaderExtensionMotor.getCurrentPosition();
                 double power = extensionController.calculate(currentPosition, 300);
-                leaderExtensionMotor.setPower(power);
-                followerExtensionMotor.setPower(power);
+
+                setExtensionPower(power);
 
                 if (Math.abs(currentPosition - 300) <= 10) {
                     leaderExtensionMotor.setPower(0);
@@ -289,8 +292,7 @@ public class Arm {
                     MotorUtility.reset(rotationMotor);
                     homingState = HomingState.COMPLETE;
                 } else {
-                    leaderExtensionMotor.setPower(EXTENSION_HOMING_POWER);
-                    followerExtensionMotor.setPower(EXTENSION_HOMING_POWER);
+                    setExtensionPower(EXTENSION_HOMING_POWER);
                 }
                 break;
             case COMPLETE:
@@ -449,6 +451,16 @@ public class Arm {
         rotationMotor.setPower(rotationPower);
     }
 
+    /**
+     * Utility function that sets the power to both of the extension motors, just so that we don't
+     * ever forget accidentally.
+     * @param power The power to set the extension motors
+     */
+    private void setExtensionPower(double power) {
+       leaderExtensionMotor.setPower(power);
+       followerExtensionMotor.setPower(power);
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Getters
     // ---------------------------------------------------------------------------------------------
@@ -590,6 +602,9 @@ public class Arm {
     // State Enums
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * Represents the current state of the arm.
+     */
     public enum ArmState {
         /**
          * State to represent the beginning of the match when the robot has not yet determined
@@ -617,12 +632,37 @@ public class Arm {
         MANUAL_TO_POSITION
     }
 
+    /**
+     * Represents the current section of the homing sequence that the robot is in.
+     */
     public enum HomingState {
+        /**
+         * The initial stage of the homing sequence. Zero's the intake and checks the limit switches
+         * to determine what stages of homing are necessary.
+         */
         START,
+        /**
+         * The initial retraction to zero the elevator. Runs until the limit switch is pressed.
+         */
         INITIAL_RETRACTION,
+        /**
+         * Safety extension to move the arm out enough so that a sample won't get stuck in the robot
+         * when we are homing the rotation
+         */
         SAFETY_EXTENSION,
+        /**
+         * Zeros the rotation. Runs until the front limit switch is pressed
+         */
         HOMING_ROTATION,
+        /**
+         * The final retraction. When the rotation limit switch is pressed, we know it is safe to
+         * home all the way, even if we have a sample.
+         */
         FINAL_RETRACTION,
+        /**
+         * Stage to indicate that the homing sequence is complete. Transitions the armState to
+         * {@link ArmState#POSITION}
+         */
         COMPLETE
     }
 }

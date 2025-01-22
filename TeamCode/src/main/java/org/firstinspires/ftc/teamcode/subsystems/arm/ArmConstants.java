@@ -1,7 +1,7 @@
 package org.firstinspires.ftc.teamcode.subsystems.arm;
 
 class ArmConstants {
-    static final double EXTENSION_TICKS_PER_INCH = 394.0;
+    static final double EXTENSION_TICKS_PER_INCH = 258.4;
     static final double ROTATION_TICKS_PER_DEGREE = 29.0;
     static final double ROTATION_X_OFFSET_INCHES = 9;
     static final double ROTATION_Y_OFFSET_INCHES = -4.75;
@@ -11,6 +11,13 @@ class ArmConstants {
     static final double MAX_ROTATION_DEGREES = 90;
     static final double MIN_EXTENSION_INCHES = 11;
     static final double MAX_EXTENSION_INCHES = 45;
+
+    static final double MAX_HORIZONTAL_INCHES = 33;
+    static final double MAX_VERTICAL_INCHES = 60;
+    static final double MAX_HORIZONTAL_INCHES_ROBOT_CENTRIC
+            = MAX_HORIZONTAL_INCHES + ROTATION_X_OFFSET_INCHES;
+    static final double MAX_VERTICAL_INCHES_ROBOT_CENtRIC
+            = MAX_VERTICAL_INCHES + ROTATION_Y_OFFSET_INCHES;
 
     static final double MAX_EXTENSION_POWER = 1.0;
     static final double MIN_EXTENSION_POWER = -1.0;

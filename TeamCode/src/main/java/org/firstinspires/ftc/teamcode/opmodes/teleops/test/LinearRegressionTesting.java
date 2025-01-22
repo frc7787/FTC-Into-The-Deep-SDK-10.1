@@ -19,6 +19,6 @@ public class LinearRegressionTesting extends OpMode {
     @Override public void loop() {
        arm.update();
        arm.pseudoManualControlSub(-gamepad2.left_stick_y, 2.0);
-       armDebug.cartesianPosition();
+       armDebug.cartesian();
     }
 }
