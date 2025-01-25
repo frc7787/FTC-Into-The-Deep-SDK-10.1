@@ -15,16 +15,16 @@ public class TeleOpMain extends OpMode {
     private Arm arm;
     private ArmDebug armDebug;
 
-    private final double INTAKE_OPEN_POSITION = 0.50;
+    private final double INTAKE_OPEN_POSITION = 0.55;
     private final double INTAKE_SUB_PRIMED_POSITION = 0.35;
     private final double INTAKE_CLOSED_POSITION = 0.00;
     private final double INTAKE_SPECIMEN_PICKUP_POSITION = 0.25;
     private final double INTAKE_CLIPPING_POSITION = 0.22;
 
-    private final double BUCKET_VERTICAL_POSITION = 40.0;
-    private final double BUCKET_HORIZONTAL_POSITION = 5;
-    private final double BAR_VERTICAL_POSITION = 24.5;
-    private final double BAR_HORIZONTAL_POSITION = 1.5;
+    private final double BUCKET_VERTICAL_POSITION = 56;
+    private final double BUCKET_HORIZONTAL_POSITION = 8.0;
+    private final double BAR_VERTICAL_POSITION = 31;
+    private final double BAR_HORIZONTAL_POSITION = 3.5;
 
     private final double SUB_VERTICAL_POSITION = 0.4;
     private final double SUB_HORIZONTAL_POSITION = 2.0;
@@ -37,12 +37,12 @@ public class TeleOpMain extends OpMode {
 
     private final double HOVER_VERTICAL_POSITION = 0.3;
 
-    private final double WALL_VERTICAL_INCHES = 11;
-    private final double WALL_HORIZONTAL_INCHES = 2;
+    private final double WALL_VERTICAL_INCHES = 10.5;
+    private final double WALL_HORIZONTAL_INCHES = 1.0;
 
     private Gamepad previousGamepad2, currentGamepad2, previousGamepad1, currentGamepad1;
 
-    private ArmState armState;
+    private TeleOpState teleOpState;
 
     @Override public void init() {
         drive = new MecanumDrive.Builder(hardwareMap)
@@ -55,7 +55,7 @@ public class TeleOpMain extends OpMode {
         previousGamepad1 = new Gamepad();
         currentGamepad1 = new Gamepad();
 
-        armState = ArmState.HOMING;
+        teleOpState = TeleOpState.NEUTRAL;
     }
 
     @Override public void loop() {
@@ -64,15 +64,11 @@ public class TeleOpMain extends OpMode {
         previousGamepad1.copy(currentGamepad1);
         currentGamepad1.copy(gamepad1);
 
-        double leftStickY = gamepad1.left_stick_y;
-        double leftStickX = gamepad1.left_stick_x;
-        double rightStickX = gamepad1.right_stick_x;
+        double driveInput = -gamepad1.left_stick_y;
+        double strafeInput = gamepad1.left_stick_x;
+        double turnInput = gamepad1.right_stick_x;
 
-        drive.drive(
-                leftStickY * Math.abs(leftStickY),
-                leftStickX * Math.abs(leftStickX),
-                rightStickX * Math.abs(rightStickX)
-        );
+        drive.drive(driveInput, strafeInput, turnInput);
 
         if (gamepad2.left_bumper) {
             arm.setIntakePosition(INTAKE_OPEN_POSITION);
@@ -80,65 +76,62 @@ public class TeleOpMain extends OpMode {
             arm.setIntakePosition(INTAKE_CLOSED_POSITION);
         }
 
-        switch (armState) {
-            case HOMING:
-                if (arm.state() != Arm.ArmState.HOMING) { armState = ArmState.NEUTRAL; }
-                break;
+        switch (teleOpState) {
             case NEUTRAL:
                 gamepad2.stopRumble();
-                if (gamepad2.triangle) {
-                    arm.setTargetInchesRobotCentric(BUCKET_HORIZONTAL_POSITION, BUCKET_VERTICAL_POSITION + 0.5);
-                } else if (gamepad2.square) {
-                    arm.setTargetInchesRobotCentric(BAR_HORIZONTAL_POSITION, BAR_VERTICAL_POSITION);
-                } else if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
-                    arm.setTargetInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
-                    arm.setIntakePosition(INTAKE_SUB_PRIMED_POSITION);
-                    armState = ArmState.SUB;
-                } else if (gamepad2.dpad_left) {
-                    arm.setTargetInchesRobotCentric(GROUND_HORIZONTAL_POSITION, GROUND_VERTICAL_POSITION);
-                } else if (gamepad2.circle) {
-                    arm.setTargetInches(9.8, 6.0);
-                } else if (gamepad2.cross) {
-                    arm.setTargetInchesRobotCentric(-3.0, 20.0);
-                } else if (gamepad2.dpad_up) {
-                    arm.setTargetInches(9.8, 8.5);
-                } else if (gamepad2.dpad_down) {
-                    arm.setTargetInchesRobotCentric(1.5, 18.0);
+
+                double rotationInput = -gamepad2.right_stick_y;
+                double extensionInput = -gamepad2.left_stick_y;
+
+                if (Math.abs(rotationInput) > 0.0 || Math.abs(extensionInput) > 0.0) {
+                    arm.setManualMode();
+                    arm.manualControl(rotationInput, extensionInput);
                 } else {
-                    double gamepadleftX = gamepad2.left_stick_x;
-                    double gamepadleftY = -gamepad2.left_stick_y;
-
-                    if (Math.abs(gamepadleftX) < 0.1) gamepadleftX = 0.0;
-                    if (Math.abs(gamepadleftY) < 0.2) gamepadleftY = 0.0;
-
+                    arm.setPositionMode();
+                    if (gamepad2.triangle) {
+                        arm.setTargetInchesRobotCentric(BUCKET_HORIZONTAL_POSITION, BUCKET_VERTICAL_POSITION + 0.5);
+                    } else if (gamepad2.square) {
+                        arm.setTargetInchesRobotCentric(BAR_HORIZONTAL_POSITION, BAR_VERTICAL_POSITION);
+                    } else if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
+                        arm.setTargetInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
+                        arm.setIntakePosition(INTAKE_SUB_PRIMED_POSITION);
+                        teleOpState = TeleOpState.SUB;
+                    } else if (gamepad2.dpad_left) {
+                        arm.setTargetInchesRobotCentric(GROUND_HORIZONTAL_POSITION, GROUND_VERTICAL_POSITION);
+                    } else if (gamepad2.circle) {
+                        arm.setTargetInchesRobotCentric(WALL_HORIZONTAL_INCHES, WALL_VERTICAL_INCHES + 1);
+                    } else if (gamepad2.dpad_up) {
+                        arm.setTargetInchesRobotCentric(WALL_HORIZONTAL_INCHES + 1, WALL_VERTICAL_INCHES + 4.5);
+                    }
                 }
                 break;
             case SUB:
-                gamepad2.rumble(Gamepad.RUMBLE_DURATION_CONTINUOUS);
-
-                if (arm.verticalInches() < 1.6) {
-                    arm.setIntakePosition(INTAKE_OPEN_POSITION);
-                } else {
-                    arm.setIntakePosition(INTAKE_CLOSED_POSITION);
-                }
+                gamepad2.rumble(0.1, 0.1, Gamepad.RUMBLE_DURATION_CONTINUOUS);
 
                 if (currentGamepad1.left_bumper && !previousGamepad1.left_bumper) {
+                    arm.setPositionMode();
                     arm.setTargetInchesRobotCentric(NEUTRAL_HORIZONTAL_POSITION, NEUTRAL_VERTICAL_POSITION);
-                    armState = ArmState.NEUTRAL;
+                    teleOpState = TeleOpState.NEUTRAL;
                     arm.setIntakePosition(INTAKE_CLOSED_POSITION);
                 } else {
                     if (currentGamepad1.dpad_up && !previousGamepad1.dpad_up) {
-                        arm.setVerticalTargetInches(1);
+                        arm.setPositionMode();
+                        arm.setVerticalTargetInchesSketchy(1);
+                        arm.setIntakePosition(0.0);
                     } else if (currentGamepad1.dpad_down && !previousGamepad1.dpad_down) {
-                        arm.setVerticalTargetInches(-4);
+                        arm.setPositionMode();
+                        arm.setVerticalTargetInchesSketchy(-5);
+                        arm.setIntakePosition(0.35);
                     } else {
-                        double xInput = -gamepad1.right_stick_y;
+                        double horizontalInput = -gamepad1.right_stick_y;
 
-                        if (Math.abs(xInput) > 0.1) {
-                            arm.pseudoManualControlSub(-gamepad1.right_stick_y, 5);
+                        if (Math.abs(horizontalInput) > 0.1) {
+                            arm.setManualMode();
+                            arm.manualControl(0.0, horizontalInput);
+                        } else {
+                            arm.setPositionMode();
                         }
                     }
-
                 }
                 break;
         }
@@ -149,8 +142,7 @@ public class TeleOpMain extends OpMode {
         arm.update();
     }
 
-    private enum ArmState {
-        HOMING,
+    private enum TeleOpState {
         NEUTRAL,
         SUB
     }

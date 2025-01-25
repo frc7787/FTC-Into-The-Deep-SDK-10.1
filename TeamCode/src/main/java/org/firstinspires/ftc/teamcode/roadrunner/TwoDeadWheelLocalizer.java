@@ -67,13 +67,13 @@ public final class TwoDeadWheelLocalizer implements Localizer {
                 UnnormalizedAngleUnit.RADIANS,
                 (float) Math.toRadians(angularVelocityDegrees.xRotationRate),
                 (float) Math.toRadians(angularVelocityDegrees.yRotationRate),
-                (float) Math.toRadians(angularVelocityDegrees.zRotationRate * 0.99),
+                (float) Math.toRadians(angularVelocityDegrees.zRotationRate),
                 angularVelocityDegrees.acquisitionTime
         );
 
         FlightRecorder.write("TWO_DEAD_WHEEL_INPUTS", new TwoDeadWheelInputsMessage(parPosVel, perpPosVel, angles, angularVelocity));
 
-        Rotation2d heading = Rotation2d.exp(angles.getYaw(AngleUnit.RADIANS) * 0.99);
+        Rotation2d heading = Rotation2d.exp(angles.getYaw(AngleUnit.RADIANS));
 
         // see https://github.com/FIRST-Tech-Challenge/FtcRobotController/issues/617
         double rawHeadingVel = angularVelocity.zRotationRate;

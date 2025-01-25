@@ -20,9 +20,7 @@ class ArmConstants {
             = MAX_VERTICAL_INCHES + ROTATION_Y_OFFSET_INCHES;
 
     static final double MAX_EXTENSION_POWER = 1.0;
-    static final double MIN_EXTENSION_POWER = -1.0;
     static final double MAX_ROTATION_POWER  = 1.0;
-    static final double MIN_ROTATION_POWER  = -1.0;
 
     static final double EXTENSION_HOMING_POWER = -1.0;
     static final double ROTATION_HOMING_POWER  = -1.0;

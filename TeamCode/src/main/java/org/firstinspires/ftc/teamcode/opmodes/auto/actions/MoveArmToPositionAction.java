@@ -4,13 +4,17 @@ import androidx.annotation.NonNull;
 
 import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
 import com.acmerobotics.roadrunner.Action;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.subsystems.arm.Arm;
+import org.firstinspires.ftc.teamcode.subsystems.arm.ArmDebug;
 
 public final class MoveArmToPositionAction implements Action {
     private final Arm arm;
+    private ArmDebug armDebug;
     private final double horizontalInches, verticalInches;
     private boolean initialized;
+    private ElapsedTime timer;
 
     public MoveArmToPositionAction(
             @NonNull Arm arm,
@@ -18,19 +22,24 @@ public final class MoveArmToPositionAction implements Action {
             double horizontalInches
     ) {
         this.arm = arm;
-        this.horizontalInches = horizontalInches;
         this.verticalInches = verticalInches;
+        this.horizontalInches = horizontalInches;
         initialized = false;
+        timer = new ElapsedTime();
     }
 
     @Override public boolean run(@NonNull TelemetryPacket telemetryPacket) {
+        telemetryPacket.put("X", arm.horizontalInchesRobotCentric());
+        telemetryPacket.put("Y", arm.verticalInchesRobotCentric());
+
         if (!initialized) {
             arm.setTargetInchesRobotCentric(horizontalInches, verticalInches);
+            timer.reset();
             initialized = true;
         }
         arm.update();
 
-        boolean isFinished = !arm.isAtPosition();
+        boolean isFinished = !arm.isAtPosition() || timer.seconds() > 3.0;
 
         if (isFinished) arm.stop();
 

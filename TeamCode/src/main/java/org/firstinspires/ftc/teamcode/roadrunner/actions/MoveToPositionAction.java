@@ -7,6 +7,7 @@ import com.acmerobotics.roadrunner.Action;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.subsystems.arm.Arm;
+import org.firstinspires.ftc.teamcode.subsystems.arm.ArmDebug;
 
 public class MoveToPositionAction implements Action {
     private final Arm arm;
@@ -32,9 +33,12 @@ public class MoveToPositionAction implements Action {
     }
 
     @Override public boolean run(@NonNull TelemetryPacket telemetryPacket) {
+
+        arm.setPositionMode();
+
         if (isFirstIteration) {
             elapsedTime.reset();
-            arm.setTargetInchesRobotCentric(targetVerticalInches, targetHorizontalInches);
+            arm.setTargetInchesRobotCentric(targetHorizontalInches, targetVerticalInches);
             isFirstIteration = false;
         }
         arm.update();

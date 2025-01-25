@@ -16,7 +16,7 @@ import org.firstinspires.ftc.teamcode.utility.*;
 import static org.firstinspires.ftc.teamcode.subsystems.arm.ArmConstants.*;
 import static org.firstinspires.ftc.teamcode.subsystems.arm.ArmConversions.*;
 
-public class Arm {
+public final class Arm {
     // ---------------------------------------------------------------------------------------------
     // Hardware
     // ---------------------------------------------------------------------------------------------
@@ -43,18 +43,18 @@ public class Arm {
 
     double manualExtensionPower, manualRotationPower;
 
-    double maxSpeed;
+    double maxExtensionPower, maxRotationPower;
 
     boolean isFirstManualControlIteration;
 
-    private ElapsedTime manualControlTimer;
+    private final ElapsedTime manualControlTimer;
 
     // ---------------------------------------------------------------------------------------------
     // Controllers
     // ---------------------------------------------------------------------------------------------
 
     private final PIDController extensionController
-            = new PIDController(0.00133, 0, 0.0001);
+            = new PIDController(0.0012, 0, 0.0001);
 
     private final PIDController rotationController
             = new PIDController(0.0092, 0, 0.000012);
@@ -64,7 +64,6 @@ public class Arm {
     // ---------------------------------------------------------------------------------------------
 
     public Arm(@NonNull HardwareMap hardwareMap) {
-
         leaderExtensionMotor = hardwareMap.get(DcMotorImplEx.class, "leaderExtensionMotor");
         followerExtensionMotor = hardwareMap.get(DcMotorImplEx.class, "followerExtensionMotor");
         rotationMotor = hardwareMap.get(DcMotorImplEx.class, "rotationMotor");
@@ -87,7 +86,8 @@ public class Arm {
         manualExtensionPower = 0.0;
         manualRotationPower = 0.0;
 
-        maxSpeed = MAX_EXTENSION_POWER;
+        maxExtensionPower = MAX_EXTENSION_POWER;
+        maxRotationPower = MAX_ROTATION_POWER;
 
         horizontalTargetInches = START_POSITION_XY[0];
         verticalTargetInches = START_POSITION_XY[1];
@@ -107,47 +107,28 @@ public class Arm {
     public void update() {
         updatePositionInformation();
 
-        double rotationPower, extensionPower;
+        double rotationPower = 0;
+        double extensionPower = 0;
 
         switch (armState) {
             case HOMING:
                 home();
-                break;
+                return;
             case MANUAL:
                 rotationPower = manualRotationPower;
                 extensionPower = manualExtensionPower;
 
-                if (frontRotationLimitSwitch.isPressed() && rotationPower < 0.0) rotationPower = 0.0;
-                if (backRotationLimitSwitch.isPressed() && rotationPower > 0.0) rotationPower = 0.0;
-
-                if (extensionLimitSwitch.isPressed() && extensionPower <= 0.0) extensionPower = 0.0;
-
-                updatePositionInformation();
-
                 if (horizontalInchesRobotCentric() >= MAX_HORIZONTAL_INCHES_ROBOT_CENTRIC) {
                     if (extensionPower >= 0.0) extensionPower = 0.0;
-                    if (rotationPower < 0.0) extensionPower = -0.8;
+                    if (rotationPower < 0.0) extensionPower = -1.0;
                 }
 
-                rotationMotor.setPower(rotationPower);
-                setExtensionPower(extensionPower);
-
+                rotationTargetPosition = rotationPosition;
+                extensionTargetPosition = extensionPosition;
                 break;
-            case MANUAL_TO_POSITION:
-                rotationMotor.setPower(0.0);
-                setExtensionPower(0.0);
-
-                rotationTargetPosition = rotationMotor.getCurrentPosition();
-                extensionTargetPosition = leaderExtensionMotor.getCurrentPosition();
-
-                updatePositionInformation();
-
-                armState = ArmState.POSITION;
             case POSITION:
                 rotationPower = rotationController.calculate(rotationPosition, rotationTargetPosition);
-                rotationPower = Range.clip(rotationPower, MIN_ROTATION_POWER, MAX_ROTATION_POWER);
                 extensionPower = extensionController.calculate(extensionPosition, extensionTargetPosition);
-                extensionPower = Range.clip(extensionPower, MIN_EXTENSION_POWER, maxSpeed);
 
                 if (extensionTargetPosition <= 0 && extensionLimitSwitch.isPressed()) {
                     extensionPower = 0.0;
@@ -165,21 +146,28 @@ public class Arm {
                     extensionPower = 0.0;
                 }
 
-                if (backRotationLimitSwitch.isPressed() && rotationPower >= 0.0) {
-                    rotationPower = 0.0;
-                }
-
                 if (rotationAtPosition()) rotationPower = 0.0;
                 if (extensionAtPosition()) extensionPower = 0.0;
 
-                if (extensionLimitSwitch.isPressed() && extensionPower < 0.0) extensionPower = 0.0;
+                if (isAtPosition()) {
+                    maxExtensionPower = MAX_EXTENSION_POWER;
+                    maxRotationPower = MAX_ROTATION_POWER;
+                }
 
                 if (inches() < 0.5 && extensionPower < 0.0) extensionPower = 0.0;
 
-                setExtensionPower(extensionPower);
-                rotationMotor.setPower(rotationPower);
                 break;
         }
+
+        rotationPower = Range.clip(rotationPower, -maxRotationPower, maxRotationPower);
+        extensionPower = Range.clip(extensionPower, -maxExtensionPower, maxExtensionPower);
+
+        if (frontRotationLimitSwitch.isPressed() && rotationPower < 0.0) rotationPower = 0.0;
+        if (backRotationLimitSwitch.isPressed() && rotationPower > 0.0) rotationPower = 0.0;
+        if (extensionLimitSwitch.isPressed() && extensionPower <= 0.0) extensionPower = 0.0;
+
+        setExtensionPower(extensionPower);
+        rotationMotor.setPower(rotationPower);
     }
 
     /**
@@ -304,6 +292,10 @@ public class Arm {
         }
     }
 
+    private double frictionRegression(@NonNull Arm.Direction direction) {
+      return 0.0;
+    }
+
     /**
      * Sets the arm to manual mode. Only works if the arm is in the {@link ArmState#POSITION} state.
      */
@@ -317,20 +309,20 @@ public class Arm {
      */
     public void setPositionMode() {
         if (armState != ArmState.MANUAL) return;
-        armState = ArmState.MANUAL_TO_POSITION;
+        armState = ArmState.POSITION;
     }
 
     /**
      * Manual control for the arm. The inputs to this function will be ignored if the arm state is
-     * not {@link ArmState#MANUAL}. To set the arm to the manual state, call {@link Arm}.
+     * not {@link ArmState#MANUAL}. To set the arm to the manual state, call {@link Arm#setManualMode}.
      * @param rotationInput The power to give the rotation motor
      * @param extensionInput The power to give the extension motors
      */
     public void manualControl(double rotationInput, double extensionInput) {
         if (armState != ArmState.MANUAL) return;
 
-        manualRotationPower = Range.clip(rotationInput, -1.0, 1.0);
-        manualExtensionPower = Range.clip(extensionInput , -1.0, 1.0);
+        manualRotationPower = rotationInput;
+        manualExtensionPower = extensionInput;
     }
 
     /**
@@ -365,7 +357,7 @@ public class Arm {
         if (horizontalTargetInches >= 30.0) horizontalTargetInches = 30.0;
         this.horizontalTargetInches = horizontalTargetInches;
         this.verticalTargetInches = verticalTargetInches;
-        double[] polarCoordinates = cartesianToPolar(horizontalTargetInches,verticalTargetInches);
+        double[] polarCoordinates = cartesianToPolar(horizontalTargetInches, verticalTargetInches);
         rotationTargetPosition = rotationDegreesToTicksCorrected(polarCoordinates[0]);
         extensionTargetPosition = extensionInchesToTicks(polarCoordinates[1]);
     }
@@ -386,6 +378,10 @@ public class Arm {
      */
     public void setVerticalTargetInches(double verticalTargetInches) {
         setTargetInches(this.horizontalTargetInches, verticalTargetInches);
+    }
+
+    public void setVerticalTargetInchesSketchy(double verticalTargetInches) {
+        setTargetInches(horizontalInches, verticalTargetInches);
     }
 
     /**
@@ -434,10 +430,28 @@ public class Arm {
 
     /**
      * Sets the max speed for the next movement.
-     * @param speed The speed to set
+     * @param extensionPower The max power for the next movement of the arm
      */
-    public void setMaxSpeed(double speed) {
-        maxSpeed = Range.clip(speed, 0.0, 1.0);
+    public void setMaxExtensionPower(double extensionPower) {
+        maxExtensionPower = Range.clip(extensionPower, -MAX_EXTENSION_POWER, MAX_EXTENSION_POWER);
+    }
+
+    /**
+     * Sets the max rotation speed for the next movement.
+     * @param rotationPower The rotation power for the next movement of the arm
+     */
+    public void setMaxRotationPower(double rotationPower) {
+        maxRotationPower = Range.clip(rotationPower, -MAX_ROTATION_POWER, MAX_ROTATION_POWER);
+    }
+
+    /**
+     * Sets the max speeds for the next movement
+     * @param rotationPower The rotation power for the next movement of the arm
+     * @param extensionPower The extension power for the next movement
+     */
+    public void setMaxPower(double rotationPower, double extensionPower) {
+        setMaxRotationPower(rotationPower);
+        setMaxExtensionPower(extensionPower);
     }
 
     /**
@@ -606,63 +620,25 @@ public class Arm {
      * Represents the current state of the arm.
      */
     public enum ArmState {
-        /**
-         * State to represent the beginning of the match when the robot has not yet determined
-         * its position. Only has one transition, to {@link ArmState#POSITION} which is successfully
-         * completing the homing sequence
-         */
         HOMING,
-        /**
-         * State to represent the arm in it's default state, moving to whatever the current target
-         * position. This state can be transitioned to from {@link ArmState#HOMING} and
-         * {@link ArmState#MANUAL_TO_POSITION}. Can transition to {@link ArmState#MANUAL_TO_POSITION}
-         */
         POSITION,
-        /**
-         * State to represent manual control of the arm. While the arm is in this state it accepts
-         * powers as inputs, and any target position commands will NOT be stored for later. The only
-         * transition out of this state is {@link ArmState#MANUAL_TO_POSITION} as cleanup must be done
-         * to ensure proper functioning of the arm.
-         */
         MANUAL,
-        /**
-         * Transition state from manual to position control responsible. This state will only be
-         * called once on transition from {@link ArmState#MANUAL} to {@link ArmState#POSITION}
-         */
-        MANUAL_TO_POSITION
     }
 
     /**
      * Represents the current section of the homing sequence that the robot is in.
      */
     public enum HomingState {
-        /**
-         * The initial stage of the homing sequence. Zero's the intake and checks the limit switches
-         * to determine what stages of homing are necessary.
-         */
         START,
-        /**
-         * The initial retraction to zero the elevator. Runs until the limit switch is pressed.
-         */
         INITIAL_RETRACTION,
-        /**
-         * Safety extension to move the arm out enough so that a sample won't get stuck in the robot
-         * when we are homing the rotation
-         */
         SAFETY_EXTENSION,
-        /**
-         * Zeros the rotation. Runs until the front limit switch is pressed
-         */
         HOMING_ROTATION,
-        /**
-         * The final retraction. When the rotation limit switch is pressed, we know it is safe to
-         * home all the way, even if we have a sample.
-         */
         FINAL_RETRACTION,
-        /**
-         * Stage to indicate that the homing sequence is complete. Transitions the armState to
-         * {@link ArmState#POSITION}
-         */
         COMPLETE
+    }
+
+    private enum Direction {
+       FORWARD,
+       REVERSE
     }
 }
