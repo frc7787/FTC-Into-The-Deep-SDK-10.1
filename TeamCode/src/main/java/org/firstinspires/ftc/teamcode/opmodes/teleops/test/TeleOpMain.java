@@ -121,7 +121,7 @@ public class TeleOpMain extends OpMode {
                     } else if (currentGamepad1.dpad_down && !previousGamepad1.dpad_down) {
                         arm.setPositionMode();
                         arm.setVerticalTargetInchesSketchy(-5);
-                        arm.setIntakePosition(0.35);
+                        arm.setIntakePosition(0.45);
                     } else {
                         double horizontalInput = -gamepad1.right_stick_y;
 
